@@ -1,15 +1,14 @@
 import type { NextConfig } from "next";
 
-const isDevMode =
-  process.env.TB_DEV_MODE === "true" ||
-  process.env.VERCEL_ENV === "development" ||
-  process.env.VERCEL_ENV === "preview";
+const isProduction =
+  process.env.VERCEL_ENV === "production" &&
+  process.env.TB_DEV_MODE !== "true";
 
 const nextConfig: NextConfig = {
   assetPrefix:
-    isDevMode || !process.env.APP_SLUG
-      ? undefined
-      : `https://api.teambridge.com/apps/${process.env.APP_SLUG}/`,
+    isProduction && process.env.APP_SLUG
+      ? `https://api.teambridge.com/apps/${process.env.APP_SLUG}/`
+      : undefined,
 };
 
 export default nextConfig;
