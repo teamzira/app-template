@@ -13,6 +13,7 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://open-api.teambridge.com';
 const DEFAULT_AUTH_URL = 'https://teambridge.us.auth0.com/oauth/token';
+const DEFAULT_AUDIENCE = 'https://api.teambridge.com/openapi/';
 
 /**
  * Teambridge API client for making authenticated requests to the Teambridge API.
@@ -47,7 +48,7 @@ export class TBClient {
     this.clientSecret = config.clientSecret;
     this.baseUrl = config.baseUrl || DEFAULT_BASE_URL;
     this.authUrl = config.authUrl || DEFAULT_AUTH_URL;
-    this.audience = config.audience || this.baseUrl;
+    this.audience = config.audience || DEFAULT_AUDIENCE;
   }
 
   /**

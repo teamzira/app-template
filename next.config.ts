@@ -1,13 +1,17 @@
 import type { NextConfig } from "next";
 
-const isProduction =
-  process.env.VERCEL_ENV === "production" &&
-  process.env.TB_DEV_MODE !== "true";
+const isDevMode =
+  process.env.TB_DEV_MODE === "true" ||
+  (process.env.V0_MODE === "true" &&
+    process.env.VERCEL_ENV !== "production");
+
+const tbServerBaseUrl =
+  process.env.TB_SERVER_BASE_URL || "https://api.teambridge.com";
 
 const nextConfig: NextConfig = {
   assetPrefix:
-    isProduction && process.env.APP_SLUG
-      ? `https://api.teambridge.com/apps/${process.env.APP_SLUG}/`
+    !isDevMode && process.env.APP_SLUG
+      ? `${tbServerBaseUrl}/apps/${process.env.APP_SLUG}/`
       : undefined,
 };
 

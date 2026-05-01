@@ -40,8 +40,8 @@ function getFallbackContext() {
   return {
     accountId: process.env.TB_DEV_ACCOUNT_ID || '',
     userId: process.env.TB_DEV_USER_ID || '',
-    userEmail: process.env.TB_DEV_USER_EMAIL || '',
-    userName: process.env.TB_DEV_USER_NAME || '',
+    userEmail: process.env.TB_DEV_USER_EMAIL || 'test@teambridge.com',
+    userName: process.env.TB_DEV_USER_NAME || 'Test User',
   };
 }
 

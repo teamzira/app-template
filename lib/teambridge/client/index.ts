@@ -4,15 +4,6 @@ export * from './types';
 /**
  * Get a TBClient instance using OAuth2 credentials from environment variables.
  *
- * Required environment variables:
- * - TB_CLIENT_ID: OAuth2 Client ID
- * - TB_CLIENT_SECRET: OAuth2 Client Secret
- *
- * Optional environment variables:
- * - TB_API_BASE_URL: API base URL (defaults to https://api.teambridge.com)
- * - TB_AUTH_URL: Auth0 token endpoint (defaults to https://teambridge.us.auth0.com/oauth/token)
- * - TB_AUDIENCE: OAuth2 audience (defaults to API base URL)
- *
  * @example
  * ```ts
  * import { getTBClient } from '@/lib/teambridge';
@@ -35,7 +26,7 @@ export function getTBClient() {
   return new TBClient({
     clientId,
     clientSecret,
-    baseUrl: process.env.TB_API_BASE_URL,
+    baseUrl: process.env.TB_OPEN_API_BASE_URL,
     authUrl: process.env.TB_AUTH_URL,
     audience: process.env.TB_AUDIENCE,
   });
