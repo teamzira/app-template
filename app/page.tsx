@@ -162,7 +162,7 @@ export default async function LocationsPage() {
       if (shiftsCollection) {
         const [shiftFieldsResponse, shiftRecordsResponse] = await Promise.all([
           client.collections.getFields(shiftsCollection.id),
-          client.collections.records.list(shiftsCollection.id, { page: 0, pageSize: 200 }),
+          client.collections.records.list(shiftsCollection.id, { page: 0, pageSize: 50 }),
         ]);
         
         shiftsResponse = shiftRecordsResponse;
