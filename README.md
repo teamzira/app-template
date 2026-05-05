@@ -46,30 +46,54 @@ TB_DEV_USER_NAME=Your Name
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see your app.
+Open [http://localhost:3000](http://localhost:3000) to see the template.
+
+What's rendered is **example code** — a demo shifts dashboard built on the design system. When you're ready to start building, replace the contents of `app/page.tsx` (and remove `app/create-shift-modal.tsx` / `app/actions.ts`). See [`AGENTS.md`](./AGENTS.md) for the design rules and primitives to build with.
+
+## Design System
+
+Apps built from this template use the **Alloy** design system, replicated locally via Tailwind tokens and shadcn/ui — no runtime dependency on the Alloy package.
+
+- **`app/globals.css`** defines the full Alloy palette (Layer 1) and semantic tokens (Layer 2), then exposes them as Tailwind utilities. shadcn-compatible aliases (`bg-background`, `bg-primary`, `text-muted-foreground`, etc.) auto-flip with the `.dark` class on `<html>`.
+- **`components/ui/`** ships with 22 pre-installed shadcn primitives (button, card, dialog, table, tabs, alert, badge, etc.) — already themed to Alloy. They're owned by your repo, edit freely.
+- **Tailwind utilities resolve to Alloy values automatically.** `bg-blue-500` is Alloy blue 500. `rounded-md` is Alloy's 8px. v0-generated code lands on-brand without v0 knowing about Alloy.
+- **`AGENTS.md`** at the repo root captures the design rules — color and radius conventions, when to use which tokens, common mistakes. Both v0 and Claude Code read it to bias generation toward the design system.
+
+To add more primitives:
+
+```bash
+npx shadcn@latest add <name>
+```
 
 ## Project Structure
 
 ```
 ├── app/
 │   ├── layout.tsx              # Root layout with TBProvider
-│   ├── page.tsx                # Home page (start here!)
-│   ├── globals.css             # Global styles
+│   ├── page.tsx                # ⚠ Example demo — replace contents when starting a real app
+│   ├── create-shift-modal.tsx  # ⚠ Example — delete or replace
+│   ├── actions.ts              # ⚠ Example — delete or replace
+│   ├── globals.css             # Alloy design tokens + Tailwind theme bridge
 │   └── api/
 │       └── teambridge/
 │           ├── install/
 │           │   └── route.ts    # Installation webhook
 │           └── uninstall/
 │               └── route.ts    # Uninstallation webhook
+├── components/
+│   └── ui/                     # shadcn primitives, themed to Alloy
 ├── lib/
-│   └── teambridge/             # Teambridge integration
-│       ├── index.ts            # Main exports
-│       ├── types.ts            # TypeScript types
-│       ├── middleware.ts       # Request validation
-│       ├── context/            # TBProvider and hooks
-│       ├── client/             # API client
-│       └── handlers/           # Lifecycle handlers
-├── middleware.ts               # Next.js middleware
+│   ├── teambridge/             # Teambridge integration
+│   │   ├── index.ts            # Main exports
+│   │   ├── types.ts            # TypeScript types
+│   │   ├── middleware.ts       # Request validation (used by proxy.ts)
+│   │   ├── context/            # TBProvider and hooks
+│   │   ├── client/             # API client
+│   │   └── handlers/           # Lifecycle handlers
+│   └── utils.ts                # cn() helper
+├── proxy.ts                    # Next.js proxy (formerly middleware.ts)
+├── components.json             # shadcn configuration
+├── AGENTS.md                   # Design system rules for AI agents and humans
 ├── .env.example                # Environment template
 └── .env.local                  # Local config (gitignored)
 ```
@@ -172,7 +196,7 @@ Dev mode allows you to develop locally without going through the Teambridge prox
 
 1. Set `TB_DEV_MODE=true` in your `.env.local`
 2. Configure `TB_DEV_ACCOUNT_ID`, `TB_DEV_USER_ID`, etc.
-3. The middleware will use these values instead of validating signatures
+3. The proxy will use these values instead of validating signatures
 
 ### Testing with Real Data
 
@@ -266,5 +290,7 @@ Make sure to:
 
 ## Learn More
 
+- [`AGENTS.md`](./AGENTS.md) — design system rules and conventions for this template
+- [shadcn/ui](https://ui.shadcn.com) — the component library used in `components/ui/`
 - [Teambridge API Documentation](https://docs.teambridge.com)
 - [Next.js Documentation](https://nextjs.org/docs)

@@ -4,9 +4,7 @@ Guidance for AI coding agents (Claude Code, v0, Cursor, etc.) and human contribu
 
 ## What this template is
 
-A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system**.
-
-Alloy reference: https://yizzy-gif.github.io/alloy-design-system/ — visual reference only. Do not install or import from the Alloy package; the design language is replicated locally via Tailwind tokens + shadcn/ui.
+A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated locally via Tailwind tokens + shadcn/ui (no runtime dependency on the Alloy package).
 
 ## ⚠️ Example code — replace before shipping a real app
 
@@ -153,4 +151,4 @@ middleware.ts         # Request validation
 
 ## When in doubt
 
-Open the Alloy preview site (https://yizzy-gif.github.io/alloy-design-system/) and match what's there. If a component or pattern in the design system doesn't have a shadcn equivalent in this template, prefer composing it from existing primitives over reaching for new dependencies.
+If a component or pattern doesn't have a shadcn equivalent already in this template, prefer composing it from existing primitives over reaching for new dependencies. When stuck on visual choices, lean on the semantic tokens (`bg-muted`, `text-muted-foreground`, etc.) — they're calibrated to match Alloy without you needing to remember the exact values.

@@ -276,10 +276,10 @@ export default async function Home({
                             userName={shift.userId ? userNames[shift.userId] : undefined}
                           />
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell>
                           {shift.startAt ? new Date(shift.startAt).toLocaleString() : '—'}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell>
                           {shift.endAt ? new Date(shift.endAt).toLocaleString() : '—'}
                         </TableCell>
                         <TableCell>
@@ -355,8 +355,8 @@ function StatCard({
           {icon}
         </div>
         <div>
-          <p className="text-2xl font-semibold">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-xl font-medium">{value}</p>
+          <p className="text-xs">{label}</p>
         </div>
       </CardContent>
     </Card>

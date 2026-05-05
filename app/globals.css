@@ -303,16 +303,16 @@
   --card-foreground:       var(--color-content-primary);
   --popover:               var(--color-bg-primary);
   --popover-foreground:    var(--color-content-primary);
-  --primary:               var(--alloy-blue-500);
-  --primary-foreground:    var(--alloy-white);
+  --primary:               var(--color-bg-inverse-primary);   /* black light, white dark — Alloy primary button */
+  --primary-foreground:    var(--color-content-inverse-primary);
   --secondary:             var(--color-bg-secondary);
   --secondary-foreground:  var(--color-content-primary);
   --muted:                 var(--color-bg-secondary);
   --muted-foreground:      var(--color-content-tertiary);
   --accent:                var(--color-bg-tertiary);
   --accent-foreground:     var(--color-content-primary);
-  --destructive:           var(--alloy-red-500);
-  --destructive-foreground: var(--alloy-white);
+  --destructive:           var(--color-red-bg-primary);        /* red-600 light, red-500 dark */
+  --destructive-foreground: var(--color-content-inverse-primary);
   --border:                var(--color-border-opaque);
   --input:                 var(--color-border-opaque);
   --ring:                  var(--color-border-focus);
@@ -383,9 +383,8 @@
   --shadow-above-md:   0 -2px 4px 0 rgba(0, 0, 0, 0.15), 0 -12px 32px 0 rgba(0, 0, 0, 0.30);
   --shadow-above-high: 0 -2px 4px 0 rgba(0, 0, 0, 0.15), 0 -12px 32px 0 rgba(0, 0, 0, 0.45);
 
-  /* shadcn-compatible aliases (dark mode) */
-  --primary:               var(--alloy-blue-400);
-  --destructive:           var(--alloy-red-400);
+  /* shadcn-compatible aliases auto-flip in dark via the inverse tokens — no
+     overrides needed here. */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -638,6 +637,20 @@
 /* ─────────────────────────────────────────────────────────────────────────
    Base document styles
    ───────────────────────────────────────────────────────────────────────── */
+
+/* Default every element's border-color to --border and outline-color to --ring.
+   Without this, Tailwind v4's reset leaves `border: 0 solid currentColor`, so
+   the .border utility paints near-black borders instead of Alloy slate-100. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop {
+    border-color: var(--border);
+    outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
+  }
+}
+
 body {
   background: var(--color-bg-primary);
   color: var(--color-content-primary);
