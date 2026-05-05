@@ -1,15 +1,18 @@
 'use client';
 
-import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Pie, PieChart, Cell, ResponsiveContainer } from 'recharts';
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
 
-type ShiftLocationData = {
+export type ShiftLocationDataInput = {
   name: string;
   count: number;
+};
+
+type ShiftLocationDataWithColor = ShiftLocationDataInput & {
   fill: string;
 };
 
@@ -27,7 +30,17 @@ const CHART_COLORS = [
   '#6366f1', // indigo-500
 ];
 
-export function ShiftsByLocationChart({ data }: { data: ShiftLocationData[] }) {
+function assignColors(
+  locationCounts: ShiftLocationDataInput[]
+): ShiftLocationDataWithColor[] {
+  return locationCounts.map((item, index) => ({
+    ...item,
+    fill: CHART_COLORS[index % CHART_COLORS.length],
+  }));
+}
+
+export function ShiftsByLocationChart({ data: inputData }: { data: ShiftLocationDataInput[] }) {
+  const data = assignColors(inputData);
   if (data.length === 0) {
     return (
       <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
@@ -51,49 +64,57 @@ export function ShiftsByLocationChart({ data }: { data: ShiftLocationData[] }) {
   );
 
   return (
-    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[280px]">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <ChartTooltip
-            content={
-              <ChartTooltipContent
-                formatter={(value, name) => (
-                  <div className="flex items-center justify-between gap-4">
-                    <span>{name}</span>
-                    <span className="font-mono font-medium">
-                      {value} ({((Number(value) / total) * 100).toFixed(1)}%)
-                    </span>
-                  </div>
-                )}
-              />
-            }
-          />
-          <Pie
-            data={data}
-            dataKey="count"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={100}
-            paddingAngle={2}
-            strokeWidth={0}
-          >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-    </ChartContainer>
+    <div>
+      <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[280px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  formatter={(value, name) => (
+                    <div className="flex items-center justify-between gap-4">
+                      <span>{name}</span>
+                      <span className="font-mono font-medium">
+                        {value} ({((Number(value) / total) * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  )}
+                />
+              }
+            />
+            <Pie
+              data={data}
+              dataKey="count"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={100}
+              paddingAngle={2}
+              strokeWidth={0}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2">
+        {data.map((item) => (
+          <div key={item.name} className="flex items-center gap-1.5 text-xs">
+            <div
+              className="size-2.5 rounded-sm"
+              style={{ backgroundColor: item.fill }}
+            />
+            <span className="text-muted-foreground">{item.name}</span>
+            <span className="font-medium">{item.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-export function assignColors(
-  locationCounts: { name: string; count: number }[]
-): ShiftLocationData[] {
-  return locationCounts.map((item, index) => ({
-    ...item,
-    fill: CHART_COLORS[index % CHART_COLORS.length],
-  }));
-}
+

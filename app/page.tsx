@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ShiftsByLocationChart, assignColors } from './shifts-by-location-chart';
+import { ShiftsByLocationChart } from './shifts-by-location-chart';
 
 type LocationFieldMapping = {
   name?: string;
@@ -170,11 +170,9 @@ export default async function LocationsPage() {
   }
 
   // Convert to array and sort by count descending
-  const shiftLocationData = assignColors(
-    Array.from(shiftCountByLocation.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-  );
+  const shiftLocationData = Array.from(shiftCountByLocation.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -214,21 +212,6 @@ export default async function LocationsPage() {
                 </div>
               ) : (
                 <ShiftsByLocationChart data={shiftLocationData} />
-              )}
-              {/* Legend */}
-              {shiftLocationData.length > 0 && (
-                <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2">
-                  {shiftLocationData.map((item) => (
-                    <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                      <div
-                        className="size-2.5 rounded-sm"
-                        style={{ backgroundColor: item.fill }}
-                      />
-                      <span className="text-muted-foreground">{item.name}</span>
-                      <span className="font-medium">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
               )}
             </CardContent>
           </Card>
