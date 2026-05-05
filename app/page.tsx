@@ -139,7 +139,7 @@ export default async function LocationsPage() {
 
       const collections = await client.collections.list();
       const locationsCollection = collections.find((c) => c.name.toLowerCase().includes('location'));
-      const shiftsCollection = collections.find((c) => c.name.toLowerCase().includes('shift'));
+      const shiftsCollection = collections.find((c) => c.name === 'Shifts');
       
       if (!locationsCollection) {
         throw new Error(
