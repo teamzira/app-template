@@ -231,10 +231,7 @@ export default async function Home({
             <CreateShiftModal users={usersList} />
           </CardHeader>
 
-          <FilterTabs
-            current={currentFilter}
-            counts={{ all: totalCount, published: publishedCount, draft: draftCount }}
-          />
+          <FilterTabs current={currentFilter} />
 
           <CardContent>
             {!credentials ? (
@@ -257,39 +254,37 @@ export default async function Home({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : filteredShifts.length > 0 ? (
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Assignee</TableHead>
-                      <TableHead>Start Time</TableHead>
-                      <TableHead>End Time</TableHead>
-                      <TableHead>Status</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Assignee</TableHead>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredShifts.map((shift) => (
+                    <TableRow key={shift.id}>
+                      <TableCell>
+                        <Assignee
+                          userId={shift.userId}
+                          userName={shift.userId ? userNames[shift.userId] : undefined}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {shift.startAt ? new Date(shift.startAt).toLocaleString() : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {shift.endAt ? new Date(shift.endAt).toLocaleString() : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge published={shift.published} />
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredShifts.map((shift) => (
-                      <TableRow key={shift.id}>
-                        <TableCell>
-                          <Assignee
-                            userId={shift.userId}
-                            userName={shift.userId ? userNames[shift.userId] : undefined}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {shift.startAt ? new Date(shift.startAt).toLocaleString() : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {shift.endAt ? new Date(shift.endAt).toLocaleString() : '—'}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge published={shift.published} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               <EmptyState filter={currentFilter} />
             )}
@@ -363,29 +358,13 @@ function StatCard({
   );
 }
 
-function FilterTabs({
-  current,
-  counts,
-}: {
-  current: FilterStatus;
-  counts: { all: number; published: number; draft: number };
-}) {
+function FilterTabs({ current }: { current: FilterStatus }) {
   return (
     <div className="border-b px-6">
       <div className="-mb-px flex gap-1">
-        <FilterTab href="./" label="All" count={counts.all} active={current === 'all'} />
-        <FilterTab
-          href="./?status=published"
-          label="Published"
-          count={counts.published}
-          active={current === 'published'}
-        />
-        <FilterTab
-          href="./?status=draft"
-          label="Draft"
-          count={counts.draft}
-          active={current === 'draft'}
-        />
+        <FilterTab href="./" label="All" active={current === 'all'} />
+        <FilterTab href="./?status=published" label="Published" active={current === 'published'} />
+        <FilterTab href="./?status=draft" label="Draft" active={current === 'draft'} />
       </div>
     </div>
   );
@@ -394,12 +373,10 @@ function FilterTabs({
 function FilterTab({
   href,
   label,
-  count,
   active,
 }: {
   href: string;
   label: string;
-  count: number;
   active: boolean;
 }) {
   return (
@@ -407,16 +384,13 @@ function FilterTab({
       href={href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm transition-colors',
+        'inline-flex items-center border-b-2 px-4 py-3 text-sm transition-colors',
         active
-          ? 'border-primary text-foreground'
-          : 'border-transparent text-muted-foreground hover:text-foreground',
+          ? 'border-foreground font-medium text-foreground'
+          : 'border-transparent text-slate-800 hover:text-foreground',
       )}
     >
-      <span className={cn(active && 'font-medium')}>{label}</span>
-      <Badge variant={active ? 'default' : 'secondary'} className="rounded-full px-2 py-0 text-xs">
-        {count}
-      </Badge>
+      {label}
     </Link>
   );
 }
