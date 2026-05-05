@@ -6,6 +6,7 @@ import type {
   Collection,
   Field,
   DataRecord,
+  Shift,
   Timezone,
   Document,
   DocumentUploadOptions,
@@ -314,6 +315,43 @@ export class TBClient {
         }
         return { ...response, id: (response.id as string) ?? recordId } as DataRecord;
       },
+    },
+  };
+
+  /**
+   * Shifts API - dedicated endpoints for shift operations
+   */
+  shifts = {
+    /**
+     * List shifts with optional filters
+     */
+    list: async (
+      options?: PaginationOptions & {
+        startDate?: string;
+        endDate?: string;
+      }
+    ): Promise<PaginatedResponse<Shift>> => {
+      const params: Record<string, string | number | undefined> = {
+        ...this.paginationParams(options),
+      };
+      if (options?.startDate) params.startDate = options.startDate;
+      if (options?.endDate) params.endDate = options.endDate;
+
+      const response = await this.request<{
+        data?: unknown;
+        page?: number;
+        size?: number;
+        totalCount?: number;
+      }>('GET', '/v1/shifts', { params });
+
+      const rawData = response.data ?? response;
+      const data = Array.isArray(rawData) ? rawData : this.normalizeRecordsData(rawData);
+      return {
+        data: data as Shift[],
+        page: response.page ?? 0,
+        size: response.size ?? data.length,
+        totalCount: response.totalCount ?? data.length,
+      };
     },
   };
 
