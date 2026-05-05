@@ -140,17 +140,32 @@ export default async function LocationsPage() {
 
       // Fetch shifts if collection exists
       if (shiftsCollection) {
+        // Get shift fields to find the location field ID
+        const shiftFields = await client.collections.getFields(shiftsCollection.id);
+        const locationField = shiftFields.find(
+          (f) => f.name.toLowerCase() === 'location' || f.name.toLowerCase().includes('location')
+        );
+
         const shiftsResult = await fetchAllRecords(async (page, pageSize) => {
           const response = await client.collections.records.list(
             shiftsCollection.id,
             { page, pageSize }
           );
           return {
-            data: response.data as unknown as Shift[],
+            data: response.data,
             totalCount: response.totalCount,
           };
         });
-        shifts = shiftsResult.data;
+
+        // Map raw records to Shift type with locationId
+        shifts = shiftsResult.data.map((record) => {
+          const locationValue = locationField ? record[locationField.id] : null;
+          return {
+            ...record,
+            recordId: record.id,
+            locationId: typeof locationValue === 'string' ? locationValue : null,
+          } as unknown as Shift;
+        });
       }
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to fetch data';
