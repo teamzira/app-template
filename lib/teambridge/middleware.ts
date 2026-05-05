@@ -32,6 +32,7 @@ const TB_HEADER_USER_EMAIL = 'X-TB-User-Email';
 const TB_HEADER_USER_NAME = 'X-TB-User-Name';
 const TB_HEADER_TIMESTAMP = 'X-TB-Timestamp';
 const TB_HEADER_SIGNATURE = 'X-TB-Signature';
+const TB_HEADER_USER_CONTEXT = 'X-User-Context';
 
 /**
  * Get fallback context from environment variables (used when TB headers are missing)
@@ -143,7 +144,8 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
     const userName = request.headers.get(TB_HEADER_USER_NAME);
     const timestamp = request.headers.get(TB_HEADER_TIMESTAMP);
     const signature = request.headers.get(TB_HEADER_SIGNATURE);
-    
+    const userContext = request.headers.get(TB_HEADER_USER_CONTEXT);
+
     // Check if we have the required Teambridge headers
     const hasTeambridgeHeaders = accountId && userId && timestamp && signature;
 
@@ -179,6 +181,9 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
       response.headers.set(TB_HEADER_USER_ID, userId);
       response.headers.set(TB_HEADER_USER_EMAIL, userEmail || '');
       response.headers.set(TB_HEADER_USER_NAME, userName || '');
+      if (userContext) {
+        response.headers.set(TB_HEADER_USER_CONTEXT, userContext);
+      }
       return response;
     }
 

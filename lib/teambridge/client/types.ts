@@ -12,6 +12,8 @@ export interface TBClientConfig {
   authUrl?: string;
   /** OAuth2 audience (defaults to API base URL) */
   audience?: string;
+  /** Signed X-User-Context header value — forwarded to the Open API to act as the requesting user */
+  userContext?: string;
 }
 
 /**

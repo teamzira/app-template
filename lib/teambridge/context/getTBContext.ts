@@ -36,6 +36,7 @@ export async function getTBContext(): Promise<TBContext> {
   const userId = headersList.get('x-tb-user-id') || '';
   const userEmail = headersList.get('x-tb-user-email') || '';
   const userName = headersList.get('x-tb-user-name') || '';
+  const userContext = headersList.get('x-user-context') || undefined;
 
   return {
     accountId,
@@ -45,5 +46,6 @@ export async function getTBContext(): Promise<TBContext> {
       email: userEmail,
       name: userName,
     },
+    userContext,
   };
 }

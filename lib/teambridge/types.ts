@@ -8,6 +8,8 @@ export interface TBContext {
   userId: string;
   /** Current user information */
   user: TBUser;
+  /** Signed X-User-Context header value to forward to the Open API */
+  userContext?: string;
 }
 
 /**

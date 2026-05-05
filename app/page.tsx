@@ -77,7 +77,7 @@ export default async function Home({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const { accountId, user } = await getTBContext();
+  const { accountId, user, userContext } = await getTBContext();
   const params = await searchParams;
   const currentFilter = (params.status as FilterStatus) || 'all';
 
@@ -103,6 +103,7 @@ export default async function Home({
         baseUrl: process.env.TB_API_BASE_URL!,
         authUrl: process.env.TB_AUTH_URL!,
         audience: process.env.TB_AUDIENCE!,
+        userContext,
       });
 
       // Find the shifts collection by name
