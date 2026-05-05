@@ -3,13 +3,15 @@ import {
   AlertTriangleIcon,
   MapPinIcon,
   BuildingIcon,
+  PieChartIcon,
 } from 'lucide-react';
 import { getTBContext, TBClient, getCredentialsForAccount } from '@/lib/teambridge';
-import type { Field } from '@/lib/teambridge/client/types';
+import type { Field, Shift } from '@/lib/teambridge/client/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -21,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ShiftsByLocationChart, assignColors } from './shifts-by-location-chart';
 
 type LocationFieldMapping = {
   name?: string;
@@ -54,11 +57,32 @@ function mapRecordToLocation(
   return { id: record.id, name, address };
 }
 
+async function fetchAllRecords<T>(
+  fetcher: (page: number, pageSize: number) => Promise<{ data: T[]; totalCount: number }>
+): Promise<{ data: T[]; totalCount: number }> {
+  const pageSize = 50;
+  let page = 0;
+  let hasMore = true;
+  const allData: T[] = [];
+  let totalCount = 0;
+
+  while (hasMore) {
+    const response = await fetcher(page, pageSize);
+    allData.push(...response.data);
+    totalCount = response.totalCount;
+    hasMore = response.data.length === pageSize;
+    page++;
+  }
+
+  return { data: allData, totalCount };
+}
+
 export default async function LocationsPage() {
   const { accountId, userContext } = await getTBContext();
 
   type Location = { id: string; name: string; address: string | null };
   let locations: Location[] = [];
+  let shifts: Shift[] = [];
   let error: string | null = null;
   let totalCount = 0;
 
@@ -76,8 +100,13 @@ export default async function LocationsPage() {
       });
 
       const collections = await client.collections.list();
+
+      // Find Locations and Shifts collections
       const locationsCollection = collections.find(
         (c) => c.name.toLowerCase().includes('location')
+      );
+      const shiftsCollection = collections.find(
+        (c) => c.name.toLowerCase().includes('shift')
       );
 
       if (!locationsCollection) {
@@ -86,37 +115,70 @@ export default async function LocationsPage() {
         );
       }
 
+      // Fetch locations
       const fieldsResponse = await client.collections.getFields(locationsCollection.id);
       const fieldMapping = buildLocationFieldMapping(fieldsResponse);
 
-      // Fetch all locations with pagination (API limit is 50 per page)
-      const pageSize = 50;
-      let page = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const recordsResponse = await client.collections.records.list(
+      const locationsResult = await fetchAllRecords(async (page, pageSize) => {
+        const response = await client.collections.records.list(
           locationsCollection.id,
           { page, pageSize }
         );
+        return {
+          data: response.data.map((r) =>
+            mapRecordToLocation(r as Record<string, unknown> & { id: string }, fieldMapping)
+          ),
+          totalCount: response.totalCount,
+        };
+      });
 
-        const pageLocations = recordsResponse.data.map((r) =>
-          mapRecordToLocation(r as Record<string, unknown> & { id: string }, fieldMapping)
-        );
-        locations.push(...pageLocations);
-        totalCount = recordsResponse.totalCount;
+      locations = locationsResult.data;
+      totalCount = locationsResult.totalCount;
 
-        hasMore = recordsResponse.data.length === pageSize;
-        page++;
+      // Fetch shifts if collection exists
+      if (shiftsCollection) {
+        const shiftsResult = await fetchAllRecords(async (page, pageSize) => {
+          const response = await client.collections.records.list(
+            shiftsCollection.id,
+            { page, pageSize }
+          );
+          return {
+            data: response.data as unknown as Shift[],
+            totalCount: response.totalCount,
+          };
+        });
+        shifts = shiftsResult.data;
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to fetch locations';
+      error = e instanceof Error ? e.message : 'Failed to fetch data';
     }
   }
 
+  // Build location lookup map
+  const locationMap = new Map(locations.map((loc) => [loc.id, loc.name]));
+
+  // Count shifts by location
+  const shiftCountByLocation = new Map<string, number>();
+  for (const shift of shifts) {
+    const locationName = shift.locationId
+      ? (locationMap.get(shift.locationId) || 'Unknown Location')
+      : 'No Location';
+    shiftCountByLocation.set(
+      locationName,
+      (shiftCountByLocation.get(locationName) || 0) + 1
+    );
+  }
+
+  // Convert to array and sort by count descending
+  const shiftLocationData = assignColors(
+    Array.from(shiftCountByLocation.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+  );
+
   return (
     <div className="min-h-screen bg-secondary">
-      <main className="mx-auto max-w-4xl space-y-6 p-6">
+      <main className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-full bg-blue-100">
             <MapPinIcon className="size-5 text-blue-600" />
@@ -129,75 +191,119 @@ export default async function LocationsPage() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <BuildingIcon className="size-4 text-muted-foreground" />
-              All Locations
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            {!credentials ? (
-              <Alert>
-                <AlertTriangleIcon />
-                <AlertTitle>Configuration required</AlertTitle>
-                <AlertDescription>
-                  No credentials found for account{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                    {accountId}
-                  </code>
-                  . Set{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                    TB_CLIENT_ID
-                  </code>{' '}
-                  and{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                    TB_CLIENT_SECRET
-                  </code>{' '}
-                  in your{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                    .env.local
-                  </code>
-                  .
-                </AlertDescription>
-              </Alert>
-            ) : error ? (
-              <Alert variant="destructive">
-                <AlertCircleIcon />
-                <AlertTitle>Error loading locations</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : locations.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Address</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {locations.map((location) => (
-                    <TableRow key={location.id}>
-                      <TableCell className="font-medium">
-                        {location.name || (
-                          <span className="italic text-muted-foreground">Unnamed</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {location.address || (
-                          <span className="text-muted-foreground">No address</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Shifts by Location Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <PieChartIcon className="size-4 text-muted-foreground" />
+                Shifts by Location
+              </CardTitle>
+              <CardDescription>
+                Distribution of {shifts.length} shifts across locations
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!credentials ? (
+                <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+                  Configure credentials to view chart
+                </div>
+              ) : error ? (
+                <div className="flex h-[280px] items-center justify-center text-sm text-destructive">
+                  Error loading data
+                </div>
+              ) : (
+                <ShiftsByLocationChart data={shiftLocationData} />
+              )}
+              {/* Legend */}
+              {shiftLocationData.length > 0 && (
+                <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2">
+                  {shiftLocationData.map((item) => (
+                    <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                      <div
+                        className="size-2.5 rounded-sm"
+                        style={{ backgroundColor: item.fill }}
+                      />
+                      <span className="text-muted-foreground">{item.name}</span>
+                      <span className="font-medium">{item.count}</span>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <EmptyState />
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Locations Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <BuildingIcon className="size-4 text-muted-foreground" />
+                All Locations
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              {!credentials ? (
+                <Alert>
+                  <AlertTriangleIcon />
+                  <AlertTitle>Configuration required</AlertTitle>
+                  <AlertDescription>
+                    No credentials found for account{' '}
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      {accountId}
+                    </code>
+                    . Set{' '}
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      TB_CLIENT_ID
+                    </code>{' '}
+                    and{' '}
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      TB_CLIENT_SECRET
+                    </code>{' '}
+                    in your{' '}
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      .env.local
+                    </code>
+                    .
+                  </AlertDescription>
+                </Alert>
+              ) : error ? (
+                <Alert variant="destructive">
+                  <AlertCircleIcon />
+                  <AlertTitle>Error loading locations</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : locations.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Address</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {locations.map((location) => (
+                      <TableRow key={location.id}>
+                        <TableCell className="font-medium">
+                          {location.name || (
+                            <span className="italic text-muted-foreground">Unnamed</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {location.address || (
+                            <span className="text-muted-foreground">No address</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <EmptyState />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </main>
     </div>
   );
