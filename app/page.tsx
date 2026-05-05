@@ -2,6 +2,7 @@ import {
   AlertCircleIcon,
   AlertTriangleIcon,
   MapPinIcon,
+  BarChart3Icon,
 } from 'lucide-react';
 import { getTBContext, TBClient, getCredentialsForAccount } from '@/lib/teambridge';
 import type { Field } from '@/lib/teambridge/client/types';
@@ -21,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { AddLocationModal } from './add-location-modal';
+import { ShiftsByLocationChart } from './shifts-by-location-chart';
 
 type LocationFieldMapping = {
   name?: string;
@@ -66,11 +68,55 @@ function mapRecordToLocation(
   };
 }
 
+type ShiftLocationData = {
+  name: string;
+  value: number;
+};
+
+function buildShiftsByLocationData(
+  shifts: Array<Record<string, unknown> & { id: string }>,
+  locations: MappedLocation[],
+  locationFieldId: string | undefined,
+): ShiftLocationData[] {
+  const locationMap = new Map<string, string>();
+  for (const loc of locations) {
+    locationMap.set(loc.id, loc.name);
+  }
+
+  const counts = new Map<string, number>();
+  counts.set('No Location', 0);
+
+  for (const shift of shifts) {
+    const locationId = locationFieldId ? shift[locationFieldId] : undefined;
+    
+    if (!locationId || locationId === '') {
+      counts.set('No Location', (counts.get('No Location') ?? 0) + 1);
+    } else {
+      const locationName = locationMap.get(String(locationId)) ?? 'Unknown Location';
+      counts.set(locationName, (counts.get(locationName) ?? 0) + 1);
+    }
+  }
+
+  // Convert to array and filter out zero counts (except "No Location" if it has shifts)
+  const result: ShiftLocationData[] = [];
+  for (const [name, value] of counts) {
+    if (value > 0) {
+      result.push({ name, value });
+    }
+  }
+
+  // Sort by value descending
+  result.sort((a, b) => b.value - a.value);
+
+  return result;
+}
+
 export default async function LocationsPage() {
   const { accountId, user, userContext } = await getTBContext();
 
   type LocationsResponse = Awaited<ReturnType<TBClient['collections']['records']['list']>>;
   let locationsResponse: LocationsResponse | null = null;
+  let shiftsResponse: LocationsResponse | null = null;
   let error: string | null = null;
 
   const credentials = getCredentialsForAccount(accountId);
@@ -78,6 +124,7 @@ export default async function LocationsPage() {
   let locationFieldMapping: LocationFieldMapping = {};
   let collectionId: string | null = null;
   let fields: Field[] = [];
+  let shiftLocationFieldId: string | undefined;
 
   if (credentials) {
     try {
@@ -92,6 +139,7 @@ export default async function LocationsPage() {
 
       const collections = await client.collections.list();
       const locationsCollection = collections.find((c) => c.name.toLowerCase().includes('location'));
+      const shiftsCollection = collections.find((c) => c.name.toLowerCase().includes('shift'));
       
       if (!locationsCollection) {
         throw new Error(
@@ -109,6 +157,22 @@ export default async function LocationsPage() {
       fields = fieldsResponse;
       locationFieldMapping = buildLocationFieldMapping(fieldsResponse);
       locationsResponse = recordsResponse;
+
+      // Fetch shifts if shifts collection exists
+      if (shiftsCollection) {
+        const [shiftFieldsResponse, shiftRecordsResponse] = await Promise.all([
+          client.collections.getFields(shiftsCollection.id),
+          client.collections.records.list(shiftsCollection.id, { page: 0, pageSize: 200 }),
+        ]);
+        
+        shiftsResponse = shiftRecordsResponse;
+        
+        // Find the location field in shifts collection
+        const locationField = shiftFieldsResponse.find(
+          (f) => f.name.toLowerCase() === 'location' || f.name.toLowerCase().includes('location')
+        );
+        shiftLocationFieldId = locationField?.id;
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to fetch locations';
     }
@@ -118,6 +182,9 @@ export default async function LocationsPage() {
   const locations: MappedLocation[] = rawRecords.map((r) =>
     mapRecordToLocation(r as Record<string, unknown> & { id: string }, locationFieldMapping),
   );
+
+  const rawShifts = (shiftsResponse?.data ?? []) as Array<Record<string, unknown> & { id: string }>;
+  const shiftsByLocationData = buildShiftsByLocationData(rawShifts, locations, shiftLocationFieldId);
 
   const firstName = user.name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
   const hour = new Date().getHours();
@@ -130,6 +197,60 @@ export default async function LocationsPage() {
           {greeting}, {firstName}
         </h1>
 
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Shifts by Location Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <BarChart3Icon className="size-4 text-muted-foreground" />
+                Shifts by Location
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!credentials ? (
+                <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                  Configure credentials to view chart
+                </div>
+              ) : error ? (
+                <div className="flex h-[300px] items-center justify-center text-sm text-destructive">
+                  Error loading data
+                </div>
+              ) : (
+                <ShiftsByLocationChart data={shiftsByLocationData} />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Locations Summary Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <MapPinIcon className="size-4 text-muted-foreground" />
+                Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <span className="text-sm text-muted-foreground">Total Locations</span>
+                  <span className="text-2xl font-semibold">{locations.length}</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-3">
+                  <span className="text-sm text-muted-foreground">Total Shifts</span>
+                  <span className="text-2xl font-semibold">{rawShifts.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Unassigned Shifts</span>
+                  <span className="text-2xl font-semibold">
+                    {shiftsByLocationData.find(d => d.name === 'No Location')?.value ?? 0}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Locations Table */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-sm">
