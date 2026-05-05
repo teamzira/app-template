@@ -249,6 +249,14 @@
   --color-info-border:  var(--alloy-azure-200);
   --color-info-content: var(--alloy-azure-700);
 
+  /* Chart series palette — matches Alloy BarChart/LineChart DEFAULT_PALETTE.
+     Reference as var(--chart-N) in shadcn ChartConfig. */
+  --chart-1: var(--alloy-blue-500);
+  --chart-2: var(--alloy-green-500);
+  --chart-3: var(--alloy-yellow-400);
+  --chart-4: var(--alloy-red-500);
+  --chart-5: var(--alloy-purple-500);
+
   /* Focus rings */
   --color-bg-focus-ring:   color-mix(in srgb, var(--alloy-slate-900) 12%, transparent);
   --color-bg-error-ring:   color-mix(in srgb, var(--alloy-red-500)   12%, transparent);
