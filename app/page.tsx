@@ -102,11 +102,14 @@ export default async function LocationsPage() {
       const collections = await client.collections.list();
 
       // Find Locations and Shifts collections
+      // Use exact match first, then fall back to partial match
       const locationsCollection = collections.find(
+        (c) => c.name.toLowerCase() === 'locations'
+      ) || collections.find(
         (c) => c.name.toLowerCase().includes('location')
       );
       const shiftsCollection = collections.find(
-        (c) => c.name.toLowerCase().includes('shift')
+        (c) => c.name.toLowerCase() === 'shifts'
       );
 
       if (!locationsCollection) {
