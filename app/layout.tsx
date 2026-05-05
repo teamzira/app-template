@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'My Teambridge App',
-  description: 'A Teambridge external app',
+  title: 'Locations Dashboard',
+  description: 'Manage your account locations',
 };
 
 export default function RootLayout({
