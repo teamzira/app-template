@@ -9,7 +9,7 @@ export * from './types';
  * import { getTBClient } from '@/lib/teambridge';
  *
  * const client = getTBClient();
- * const shifts = await client.shifts.list();
+ * const collections = await client.collections.list();
  * ```
  */
 export function getTBClient() {

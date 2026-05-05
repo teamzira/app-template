@@ -139,32 +139,71 @@ function MyComponent() {
 
 ### Using the API Client
 
+> **Always use the Unified Collections API** ([docs](https://docs.teambridge.com/#tag/Collections-(Unified-API))). All app data — shifts, users, jobs, placements, etc. — lives in collections.
+
+#### The collections workflow
+
+Three calls cover almost everything:
+
+1. **Find the collection by name.** Look it up with `client.collections.list()` and match on `name` (e.g. `"Shifts"`, `"Users"`, `"Jobs"`).
+2. **Discover field IDs.** Each collection has fields with UUID IDs. Fetch them with `client.collections.getFields(collectionId)` and build a `name → id` map.
+3. **Read or write records using field IDs.** Records are keyed by field ID — not field name — both on read and on write.
+
+#### Example: list shifts
+
 ```tsx
 import { TBClient } from '@/lib/teambridge';
 
-// Create a client instance with OAuth2 credentials
 const client = new TBClient({
   clientId: process.env.TB_CLIENT_ID!,
   clientSecret: process.env.TB_CLIENT_SECRET!,
 });
 
-// List shifts
-const shifts = await client.shifts.list({ page: 0, pageSize: 50 });
+// 1. Find the Shifts collection
+const collections = await client.collections.list();
+const shiftsCollection = collections.find((c) => c.name === 'Shifts');
+if (!shiftsCollection) throw new Error('Shifts collection not found');
 
-// Get users
-const users = await client.users.list();
+// 2. Get fields and look up the IDs you need
+const fields = await client.collections.getFields(shiftsCollection.id);
+const startField = fields.find((f) => f.name === 'Start Time')!;
+const endField   = fields.find((f) => f.name === 'End Time')!;
 
-// Create a job
-const jobs = await client.jobs.create([{ name: 'My New Job' }]);
+// 3. List records — values come back keyed by field ID
+const { data, totalCount } = await client.collections.records.list(shiftsCollection.id, {
+  page: 0,
+  pageSize: 50,
+});
+
+for (const record of data) {
+  console.log(record[startField.id], record[endField.id]);
+}
 ```
 
-Or use the convenience function:
+#### Example: create a shift
+
+```tsx
+await client.collections.records.create(shiftsCollection.id, {
+  [startField.id]: '2026-06-01T09:00:00Z',
+  [endField.id]:   '2026-06-01T17:00:00Z',
+});
+```
+
+#### Example: update a record
+
+```tsx
+await client.collections.records.update(shiftsCollection.id, recordId, {
+  [endField.id]: '2026-06-01T18:00:00Z', // only include fields that change
+});
+```
+
+The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, including a cross-reference to the Users collection for the assignee picker. (Reminder: those files are example code — replace before shipping.)
+
+You can also use the convenience function in server-side code, which reads credentials from env vars:
 
 ```tsx
 import { getTBClient } from '@/lib/teambridge';
-
-const client = getTBClient(); // Uses env vars automatically
-const shifts = await client.shifts.list();
+const client = getTBClient();
 ```
 
 ### Handling Installation
@@ -222,7 +261,6 @@ interface TBClientConfig {
 ### Client Methods
 
 ```ts
-// Collections (custom data tables)
 client.collections.list()
 client.collections.getFields(collectionId)
 client.collections.records.list(collectionId, options?)
@@ -230,34 +268,11 @@ client.collections.records.get(collectionId, recordId)
 client.collections.records.create(collectionId, data)
 client.collections.records.update(collectionId, recordId, data)
 
-// Shifts
-client.shifts.list(options?)
-client.shifts.get(shiftId)
-client.shifts.create(shifts[])  // Up to 50
-client.shifts.timestamps.list(options?)
-
-// Placements
-client.placements.list(options?)
-client.placements.create(placements[])  // Up to 50
-
-// Users
-client.users.list(options?)
-client.users.get(userId)
-client.users.lookup({ email?, phone? })
-client.users.create(users[])  // Up to 200
-
-// Jobs
-client.jobs.list(options?)
-client.jobs.create(jobs[])  // Up to 50
-
-// Locations
-client.locations.get(locationId)
-
-// Timezones
-client.timezones.list()
-
-// Documents
+// File uploads — separate API
 client.documents.upload(file, options?)
+
+// Static lookup
+client.timezones.list()
 ```
 
 ### Context Types

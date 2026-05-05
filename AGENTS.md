@@ -126,6 +126,10 @@ Apps render inside an iframe within Teambridge. Keep this in mind:
 - Don't set `min-h-screen` on the body. The iframe sizes itself.
 - Background on the page should be `bg-background` (Alloy white), not a colored hero. The host already provides chrome.
 
+## Data access
+
+All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. Identify collections by their `name` field (e.g. `"Shifts"`, `"Users"`); look up field IDs from `getFields`; key record bodies by field ID. See README → "Using the API Client" for the canonical workflow and full examples.
+
 ## Project structure
 
 ```
