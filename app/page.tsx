@@ -139,11 +139,7 @@ export default async function LocationsPage() {
 
       const collections = await client.collections.list();
       const locationsCollection = collections.find((c) => c.name.toLowerCase().includes('location'));
-      // Filter to only collections that support the unified API (exclude SHIFT_GROUP, etc.)
-      const supportedTypes = ['CUSTOM', 'LOCATION', undefined];
-      const shiftsCollection = collections.find(
-        (c) => c.name.toLowerCase().includes('shift') && supportedTypes.includes((c as { type?: string }).type)
-      );
+      const shiftsCollection = collections.find((c) => c.name.toLowerCase().includes('shift'));
       
       if (!locationsCollection) {
         throw new Error(
