@@ -1,5 +1,8 @@
 'use server';
 
+/**
+ * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
+ */
 import { getTBContext, TBClient, getCredentialsForAccount } from '@/lib/teambridge';
 import type { Field } from '@/lib/teambridge/client/types';
 

@@ -1,206 +1,149 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+/**
+ * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
+ */
+import { useState, useTransition } from 'react';
+import { AlertCircleIcon, Loader2Icon, PlusIcon } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { createShift } from './actions';
 
 type UserOption = { id: string; name: string };
 
+const UNASSIGNED = '__unassigned';
+
 export function CreateShiftModal({ users = [] }: { users?: UserOption[] }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignee, setAssignee] = useState<string>(UNASSIGNED);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [isPending, startTransition] = useTransition();
-  const formRef = useRef<HTMLFormElement>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
 
-  function handleOpen() {
-    setOpen(true);
+  function reset() {
+    setAssignee(UNASSIGNED);
+    setStartTime('');
+    setEndTime('');
     setError(null);
   }
 
-  function handleClose() {
-    setOpen(false);
-    setError(null);
-    formRef.current?.reset();
-  }
-
-  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
+  function handleOpenChange(next: boolean) {
+    if (!next) reset();
+    setOpen(next);
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
     setError(null);
     startTransition(async () => {
-      const result = await createShift(new FormData(form));
+      const formData = new FormData();
+      formData.set('assignee', assignee === UNASSIGNED ? '' : assignee);
+      formData.set('startTime', startTime);
+      formData.set('endTime', endTime);
+      const result = await createShift(formData);
       if (result.error) {
         setError(result.error);
       } else {
-        handleClose();
-        // Refresh the page to show the new shift
+        handleOpenChange(false);
         window.location.reload();
       }
     });
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-      >
-        <PlusIcon className="h-4 w-4" />
-        New Shift
-      </button>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <PlusIcon />
+          New Shift
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Shift</DialogTitle>
+        </DialogHeader>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={handleBackdropClick}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-shift-title"
-        >
-          <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-xl">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <h2 id="create-shift-title" className="text-sm font-semibold text-gray-900">
-                Create New Shift
-              </h2>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                aria-label="Close"
-              >
-                <CloseIcon className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form ref={formRef} onSubmit={handleSubmit} className="p-5">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <label
-                    htmlFor="assignee"
-                    className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500"
-                  >
-                    Assignee
-                  </label>
-                  <select
-                    id="assignee"
-                    name="assignee"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Unassigned</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="startTime"
-                    className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500"
-                  >
-                    Start Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    id="startTime"
-                    name="startTime"
-                    required
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="endTime"
-                    className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500"
-                  >
-                    End Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    id="endTime"
-                    name="endTime"
-                    required
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                {error && (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="mt-5 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={isPending}
-                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-                >
-                  {isPending ? (
-                    <>
-                      <LoadingSpinner />
-                      Creating...
-                    </>
-                  ) : (
-                    'Create Shift'
-                  )}
-                </button>
-              </div>
-            </form>
+        <form id="create-shift-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="assignee">Assignee</Label>
+            <Select value={assignee} onValueChange={setAssignee}>
+              <SelectTrigger id="assignee" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      )}
-    </>
-  );
-}
 
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-    </svg>
-  );
-}
+          <div className="space-y-1.5">
+            <Label htmlFor="startTime">Start Time</Label>
+            <Input
+              type="datetime-local"
+              id="startTime"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+            />
+          </div>
 
-function CloseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
+          <div className="space-y-1.5">
+            <Label htmlFor="endTime">End Time</Label>
+            <Input
+              type="datetime-local"
+              id="endTime"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              required
+            />
+          </div>
 
-function LoadingSpinner() {
-  return (
-    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircleIcon />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </form>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="create-shift-form" disabled={isPending}>
+            {isPending && <Loader2Icon className="animate-spin" />}
+            {isPending ? 'Creating…' : 'Create Shift'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
