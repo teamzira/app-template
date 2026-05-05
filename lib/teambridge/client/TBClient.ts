@@ -33,11 +33,12 @@ const DEFAULT_AUDIENCE = 'https://api.teambridge.com/openapi/';
  * ```
  */
 export class TBClient {
-  private clientId: string;
-  private clientSecret: string;
-  private baseUrl: string;
-  private authUrl: string;
-  private audience: string;
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly baseUrl: string;
+  private readonly authUrl: string;
+  private readonly audience: string;
+  private readonly userContext: string | undefined;
 
   // Token cache
   private accessToken: string | null = null;
@@ -49,6 +50,7 @@ export class TBClient {
     this.baseUrl = config.baseUrl || DEFAULT_BASE_URL;
     this.authUrl = config.authUrl || DEFAULT_AUTH_URL;
     this.audience = config.audience || DEFAULT_AUDIENCE;
+    this.userContext = config.userContext;
   }
 
   /**
@@ -108,12 +110,17 @@ export class TBClient {
         }
       });
     }
+    const requestHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    };
+    if (this.userContext) {
+      requestHeaders['X-User-Context'] = this.userContext;
+    }
+
     const response = await fetch(url.toString(), {
       method,
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: requestHeaders,
       body: options?.body ? JSON.stringify(options.body) : undefined,
     });
 

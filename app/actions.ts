@@ -15,7 +15,7 @@ export async function createShift(formData: FormData) {
     return { error: 'End time must be after start time.' };
   }
 
-  const { accountId } = await getTBContext();
+  const { accountId, userContext } = await getTBContext();
   const credentials = getCredentialsForAccount(accountId);
 
   if (!credentials) {
@@ -29,6 +29,7 @@ export async function createShift(formData: FormData) {
       baseUrl: process.env.TB_API_BASE_URL!,
       authUrl: process.env.TB_AUTH_URL!,
       audience: process.env.TB_AUDIENCE!,
+      userContext,
     });
 
     // Find the shifts collection
