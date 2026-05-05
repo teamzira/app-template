@@ -138,7 +138,7 @@ export default async function Home({
       });
 
       const collections = await client.collections.list();
-      const shiftsCollection = collections.find((c) => c.name.toLowerCase().includes('shifts'));
+      const shiftsCollection = collections.find((c) => c.name.toLowerCase() === 'shifts');
       if (!shiftsCollection) {
         throw new Error(
           'No custom Shifts collection found. Create a custom collection (not the built-in shifts) in Teambridge to use with this app.',
@@ -152,7 +152,7 @@ export default async function Home({
       shiftFieldMapping = buildShiftFieldMapping(fieldsResponse);
       shiftsResponse = recordsResponse;
 
-      const usersCollection = collections.find((c) => c.name.toLowerCase().includes('user'));
+      const usersCollection = collections.find((c) => c.name.toLowerCase() === 'users');
       if (usersCollection) {
         const userFields = await client.collections.getFields(usersCollection.id);
         const userFieldMapping = buildUserFieldMapping(userFields);

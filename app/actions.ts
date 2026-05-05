@@ -38,7 +38,7 @@ export async function createShift(formData: FormData) {
     // Find the shifts collection
     const collections = await client.collections.list();
     const shiftsCollection = collections.find(
-      (c) => c.name.toLowerCase().includes('shifts')
+      (c) => c.name.toLowerCase() === 'shifts'
     );
 
     if (!shiftsCollection) {

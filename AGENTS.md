@@ -128,11 +128,43 @@ Apps render inside an iframe within Teambridge. Keep this in mind:
 
 ## Data access
 
-All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. Identify collections by their `name` field (e.g. `"Shifts"`, `"Users"`); look up field IDs from `getFields`; key record bodies by field ID.
+All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. The full canonical workflow with examples lives in README → "Using the API Client". The notes below cover gotchas that have tripped up agents in practice.
 
-`records.list` is paginated. **`pageSize` maxes out at 50** (default 20) — never request more in a single call. For larger result sets, paginate by incrementing `page` (0-indexed) and stop when the returned `data` length is less than `pageSize` or when you've consumed `totalCount`.
+### API constraints
 
-See README → "Using the API Client" for the canonical workflow and full examples.
+- **Page size limit**: `records.list` enforces a max of **50 records per page** (default 20). Never request more in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < pageSize` or you've consumed `totalCount`.
+
+### Collection name matching
+
+Match by **exact, case-insensitive equality** — never `includes()` or other partial matching. Accounts often have additional collections whose names contain the substring you want (e.g. `"Shifts Group"`, `"Archived Users"`); a partial match grabs whichever appears first.
+
+```ts
+// ✓ Exact, case-insensitive
+const shifts = collections.find((c) => c.name.toLowerCase() === 'shifts');
+
+// ✗ Partial — silently picks "Shifts Group" or similar
+const shifts = collections.find((c) => c.name.toLowerCase().includes('shift'));
+```
+
+### Record field mapping
+
+Records come back **keyed by field UUID, not by semantic property name**. There is no `record.locationId` or `record.startTime` — only `record["<uuid>"]`. The workflow:
+
+1. Fetch field definitions: `const fields = await client.collections.getFields(collectionId)`.
+2. Look up each field by name (exact, case-insensitive): `const locationField = fields.find((f) => f.name.toLowerCase() === 'location')`.
+3. Read the value via the field's `id`: `const locationId = locationField ? record[locationField.id] : null`.
+
+```ts
+// ✓ Look up the field, then index by its id
+const fields = await client.collections.getFields(shiftsCollection.id);
+const locationField = fields.find((f) => f.name.toLowerCase() === 'location');
+const locationId = locationField ? record[locationField.id] : null;
+
+// ✗ Records have no semantic keys — this is always undefined
+const locationId = record.locationId;
+```
+
+**Reference fields** (e.g. `Location` on a Shift, `Assignee` linking to Users) store the **record ID** of the related record, not its display name. To render names, fetch the related collection's records, build a `recordId → name` map keyed by that collection's name fields (e.g. `First Name` + `Last Name` on Users), and look up by ID at render time. The `app/page.tsx` demo does this for the Assignee column — copy that pattern.
 
 ## Project structure
 
