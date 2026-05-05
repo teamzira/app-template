@@ -86,16 +86,29 @@ export default async function LocationsPage() {
         );
       }
 
-      const [fieldsResponse, recordsResponse] = await Promise.all([
-        client.collections.getFields(locationsCollection.id),
-        client.collections.records.list(locationsCollection.id, { page: 0, pageSize: 100 }),
-      ]);
-
+      const fieldsResponse = await client.collections.getFields(locationsCollection.id);
       const fieldMapping = buildLocationFieldMapping(fieldsResponse);
-      locations = recordsResponse.data.map((r) =>
-        mapRecordToLocation(r as Record<string, unknown> & { id: string }, fieldMapping)
-      );
-      totalCount = recordsResponse.totalCount;
+
+      // Fetch all locations with pagination (API limit is 50 per page)
+      const pageSize = 50;
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const recordsResponse = await client.collections.records.list(
+          locationsCollection.id,
+          { page, pageSize }
+        );
+
+        const pageLocations = recordsResponse.data.map((r) =>
+          mapRecordToLocation(r as Record<string, unknown> & { id: string }, fieldMapping)
+        );
+        locations.push(...pageLocations);
+        totalCount = recordsResponse.totalCount;
+
+        hasMore = recordsResponse.data.length === pageSize;
+        page++;
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to fetch locations';
     }
