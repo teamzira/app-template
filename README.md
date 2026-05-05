@@ -169,7 +169,8 @@ const fields = await client.collections.getFields(shiftsCollection.id);
 const startField = fields.find((f) => f.name === 'Start Time')!;
 const endField   = fields.find((f) => f.name === 'End Time')!;
 
-// 3. List records — values come back keyed by field ID
+// 3. List records — values come back keyed by field ID.
+// pageSize maxes out at 50; for larger result sets, paginate by incrementing `page`.
 const { data, totalCount } = await client.collections.records.list(shiftsCollection.id, {
   page: 0,
   pageSize: 50,

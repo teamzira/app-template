@@ -128,7 +128,11 @@ Apps render inside an iframe within Teambridge. Keep this in mind:
 
 ## Data access
 
-All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. Identify collections by their `name` field (e.g. `"Shifts"`, `"Users"`); look up field IDs from `getFields`; key record bodies by field ID. See README → "Using the API Client" for the canonical workflow and full examples.
+All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. Identify collections by their `name` field (e.g. `"Shifts"`, `"Users"`); look up field IDs from `getFields`; key record bodies by field ID.
+
+`records.list` is paginated. **`pageSize` maxes out at 50** (default 20) — never request more in a single call. For larger result sets, paginate by incrementing `page` (0-indexed) and stop when the returned `data` length is less than `pageSize` or when you've consumed `totalCount`.
+
+See README → "Using the API Client" for the canonical workflow and full examples.
 
 ## Project structure
 
