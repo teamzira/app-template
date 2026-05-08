@@ -187,6 +187,13 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
       return response;
     }
 
+    // In production, require a valid Teambridge signature — no fallback.
+    if (process.env.VERCEL_ENV === 'production') {
+      return new NextResponse('Unauthorized: Missing Teambridge signature', {
+        status: 401,
+      });
+    }
+
     // Fallback mode: no Teambridge headers, use environment variables
     const fallbackContext = getFallbackContext();
 
