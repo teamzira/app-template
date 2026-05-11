@@ -29,7 +29,7 @@ export async function createShift(formData: FormData) {
     const client = new TBClient({
       clientId: credentials.clientId,
       clientSecret: credentials.clientSecret,
-      baseUrl: process.env.TB_API_BASE_URL!,
+      baseUrl: process.env.TB_OPEN_API_BASE_URL!,
       authUrl: process.env.TB_AUTH_URL!,
       audience: process.env.TB_AUDIENCE!,
       userContext,
