@@ -6,7 +6,7 @@
  * start building, replace this content (along with create-shift-modal.tsx
  * and actions.ts). See AGENTS.md.
  */
-import { TBLink } from '@/lib/teambridge';
+import Link from 'next/link';
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -261,6 +261,7 @@ export default async function Home({
                     <TableHead>Start Time</TableHead>
                     <TableHead>End Time</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-0" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -280,6 +281,14 @@ export default async function Home({
                       </TableCell>
                       <TableCell>
                         <StatusBadge published={shift.published} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          href={`/?rid=${encodeURIComponent(shift.id)}`}
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Open
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -362,9 +371,9 @@ function FilterTabs({ current }: { current: FilterStatus }) {
   return (
     <div className="border-b px-6">
       <div className="-mb-px flex gap-1">
-        <FilterTab href="./" label="All" active={current === 'all'} />
-        <FilterTab href="./?status=published" label="Published" active={current === 'published'} />
-        <FilterTab href="./?status=draft" label="Draft" active={current === 'draft'} />
+        <FilterTab href="/" label="All" active={current === 'all'} />
+        <FilterTab href="/?status=published" label="Published" active={current === 'published'} />
+        <FilterTab href="/?status=draft" label="Draft" active={current === 'draft'} />
       </div>
     </div>
   );
@@ -380,7 +389,7 @@ function FilterTab({
   active: boolean;
 }) {
   return (
-    <TBLink
+    <Link
       href={href}
       aria-current={active ? 'page' : undefined}
       className={cn(
@@ -391,7 +400,7 @@ function FilterTab({
       )}
     >
       {label}
-    </TBLink>
+    </Link>
   );
 }
 

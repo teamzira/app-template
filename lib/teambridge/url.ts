@@ -1,6 +1,8 @@
 /**
- * Base path prefix that all in-app URLs (router pushes, links, fetches)
- * must carry when the app is rendered inside the Teambridge proxy.
+ * Base path prefix that the Teambridge proxy serves this app at. Next.js's
+ * `basePath` setting already handles this for routing primitives (`<Link>`,
+ * `useRouter`, `redirect`, `usePathname`). This export exists for the
+ * remaining cases — most notably native `fetch`, which doesn't honor basePath.
  *
  * Empty string in dev mode (when the app runs standalone at `localhost:3000`).
  * Otherwise `/apps/<slug>`, derived in `next.config.ts` from `APP_SLUG` and
@@ -24,3 +26,4 @@ export function tbPath(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return `${TB_APP_BASE_PATH}${normalized}`;
 }
+

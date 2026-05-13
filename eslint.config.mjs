@@ -2,9 +2,11 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-// All in-app URLs must carry the /apps/<slug> prefix when the app runs inside
-// the Teambridge proxy. The wrappers in lib/teambridge handle this — these
-// rules block raw fetch / useRouter / Link / redirect from sneaking past.
+// Next.js's `basePath` config handles the /apps/<slug> prefix for routing
+// primitives (`<Link>`, `useRouter`, `redirect`, `usePathname`) automatically,
+// so apps can use them from `next/link` and `next/navigation` directly. The
+// one exception is native `fetch`, which doesn't honor basePath — `tbFetch`
+// from `@/lib/teambridge` prepends the prefix for same-origin requests.
 const tbProxyRules = {
   "no-restricted-syntax": [
     "error",
@@ -12,24 +14,6 @@ const tbProxyRules = {
       selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
       message:
         "Use tbFetch from '@/lib/teambridge' instead of bare fetch — it prepends the /apps/<slug> proxy prefix.",
-    },
-  ],
-  "no-restricted-imports": [
-    "error",
-    {
-      paths: [
-        {
-          name: "next/link",
-          message:
-            "Use TBLink from '@/lib/teambridge' instead of next/link — it prepends the /apps/<slug> proxy prefix.",
-        },
-        {
-          name: "next/navigation",
-          importNames: ["useRouter", "redirect"],
-          message:
-            "Use useTBRouter / tbRedirect from '@/lib/teambridge' — they prepend the /apps/<slug> proxy prefix.",
-        },
-      ],
     },
   ],
 };
@@ -49,12 +33,11 @@ const eslintConfig = defineConfig([
     rules: tbProxyRules,
   },
   {
-    // The wrappers themselves call the originals, and lib/teambridge/client
-    // talks to external Teambridge URLs with raw fetch. Both are intentional.
+    // `tbFetch` itself wraps the original, and `lib/teambridge/client` talks
+    // to external Teambridge URLs at absolute URLs. Both intentional.
     files: ["lib/teambridge/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": "off",
-      "no-restricted-imports": "off",
     },
   },
 ]);
