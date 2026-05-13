@@ -18,6 +18,36 @@ When the user starts building their actual app, **replace this content** before 
 
 The Teambridge integration in `lib/teambridge/`, the API route handlers in `app/api/teambridge/`, the layout in `app/layout.tsx`, the styling in `app/globals.css`, and the shadcn components in `components/ui/` are all part of the template and should be kept.
 
+## Navigation & data fetching
+
+Apps render inside the Teambridge proxy at `https://api.teambridge.com/apps/<slug>/…`. The browser sees URLs with that prefix; the Next.js server sees them with the prefix stripped. That means every URL produced on the client — `router.push`, `<Link>`, `fetch`, server-action redirects — has to carry the `/apps/<slug>` prefix to route back through the proxy correctly.
+
+The template handles this with four drop-in wrappers exported from `@/lib/teambridge`. **Always use these instead of the raw Next.js / browser APIs.** ESLint will error if you don't.
+
+```tsx
+// ✓ on-template
+import { tbFetch, useTBRouter, TBLink, tbRedirect } from '@/lib/teambridge';
+
+const router = useTBRouter();
+router.push('/dashboards/123');                  // prepends /apps/<slug>
+await tbFetch('/api/dashboards');                // prepends /apps/<slug>
+<TBLink href="/reports/456">View report</TBLink> // prepends /apps/<slug>
+tbRedirect('/dashboards/789');                   // prepends /apps/<slug> (server actions)
+
+// ✗ off-template — will fail lint, and will 404 when proxied
+import { useRouter, redirect } from 'next/navigation';
+import Link from 'next/link';
+fetch('/api/dashboards');
+```
+
+In dev mode (`TB_DEV_MODE=true`), all four wrappers are no-ops — they pass paths through unchanged. The prefix is derived at build time from `APP_SLUG` and inlined into the client bundle via `NEXT_PUBLIC_TB_APP_BASE_PATH`.
+
+A few cases the lint rule does **not** catch — be careful with these manually:
+
+- Raw `<a href="/foo">` and `<form action="/foo">` — use `<TBLink>` and route-handler form actions, or call `tbPath()` directly on the href.
+- Self-fetching your own route handlers from a server component. Don't; call the underlying logic directly instead (per [Vercel's guidance](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them)).
+- `lib/teambridge/client/TBClient.ts` deliberately uses raw `fetch` — it talks to external Teambridge APIs at absolute URLs, not to your app's own routes.
+
 ## Design system rules
 
 ### Use shadcn primitives, not hand-rolled HTML

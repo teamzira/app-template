@@ -6,7 +6,7 @@
  * start building, replace this content (along with create-shift-modal.tsx
  * and actions.ts). See AGENTS.md.
  */
-import Link from 'next/link';
+import { TBLink } from '@/lib/teambridge';
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -120,7 +120,7 @@ export default async function Home({
   let shiftsResponse: ShiftsResponse | null = null;
   let error: string | null = null;
 
-  const credentials = getCredentialsForAccount(accountId);
+  const credentials = getCredentialsForAccount();
 
   const userNames: Record<string, string> = {};
   const usersList: { id: string; name: string }[] = [];
@@ -380,7 +380,7 @@ function FilterTab({
   active: boolean;
 }) {
   return (
-    <Link
+    <TBLink
       href={href}
       aria-current={active ? 'page' : undefined}
       className={cn(
@@ -391,7 +391,7 @@ function FilterTab({
       )}
     >
       {label}
-    </Link>
+    </TBLink>
   );
 }
 

@@ -18,8 +18,8 @@ export async function createShift(formData: FormData) {
     return { error: 'End time must be after start time.' };
   }
 
-  const { accountId, userContext } = await getTBContext();
-  const credentials = getCredentialsForAccount(accountId);
+  const { userContext } = await getTBContext();
+  const credentials = getCredentialsForAccount();
 
   if (!credentials) {
     return { error: 'No credentials found for this account.' };

@@ -74,9 +74,9 @@ export interface TBHandlerConfig {
 /**
  * Install handler context passed to the callback
  */
-export interface TBInstallContext extends TBInstallPayload {}
+export type TBInstallContext = TBInstallPayload;
 
 /**
  * Uninstall handler context passed to the callback
  */
-export interface TBUninstallContext extends TBUninstallPayload {}
+export type TBUninstallContext = TBUninstallPayload;

@@ -1,4 +1,6 @@
-export { TBClient } from './TBClient';
+import { TBClient } from './TBClient';
+
+export { TBClient };
 export * from './types';
 
 /**
@@ -22,7 +24,6 @@ export function getTBClient() {
     );
   }
 
-  const { TBClient } = require('./TBClient');
   return new TBClient({
     clientId,
     clientSecret,

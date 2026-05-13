@@ -12,10 +12,10 @@ export interface TBAccountCredentials {
 
 
 /**
- * Get credentials for a specific account
- * Falls back to environment variables if no account-specific credentials are found
+ * Read the app's OAuth2 client credentials from environment variables.
+ * Returns null when either TB_CLIENT_ID or TB_CLIENT_SECRET is missing.
  */
-export function getCredentialsForAccount(accountId: string): TBAccountCredentials | null {
+export function getCredentialsForAccount(): TBAccountCredentials | null {
   const clientId = process.env.TB_CLIENT_ID;
   const clientSecret = process.env.TB_CLIENT_SECRET;
 
@@ -44,17 +44,6 @@ function getFallbackContext() {
     userEmail: process.env.TB_DEV_USER_EMAIL || 'test@teambridge.com',
     userName: process.env.TB_DEV_USER_NAME || 'Test User',
   };
-}
-
-/**
- * Convert hex string to Uint8Array
- */
-function hexToUint8Array(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
 }
 
 /**

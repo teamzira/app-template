@@ -48,3 +48,9 @@ export type {
 
 // Handlers
 export { handleTBInstall, handleTBUninstall } from './handlers';
+
+// URL + fetch + navigation wrappers (handle the /apps/<slug> proxy prefix)
+export { tbPath, TB_APP_BASE_PATH } from './url';
+export { tbFetch } from './fetch';
+export { useTBRouter, TBLink } from './navigation';
+export { tbRedirect } from './redirect';
