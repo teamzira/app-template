@@ -33,19 +33,21 @@ redirect('/dashboards/789');                   // server actions
 <Link href="/reports/456">View report</Link>
 ```
 
-**The one exception is `fetch`.** Native `fetch` doesn't honor `basePath`, so a bare `fetch('/api/dashboards')` hits `/api/dashboards` instead of `/apps/<slug>/api/dashboards` and 404s through the proxy. Use `tbFetch` from `@/lib/teambridge` for same-origin requests. ESLint will error on bare `fetch` calls.
+**The one exception is `fetch`.** Native `fetch` doesn't honor `basePath`, so a bare `fetch('/api/dashboards')` hits `/api/dashboards` instead of `/apps/<slug>/api/dashboards` and 404s through the proxy. Use `tbFetch` from `@/lib/teambridge/fetch` for same-origin requests. ESLint will error on bare `fetch` calls.
 
 ```tsx
-import { tbFetch } from '@/lib/teambridge';
+import { tbFetch } from '@/lib/teambridge/fetch';
 
 await tbFetch('/api/dashboards');              // prepends /apps/<slug>
 ```
 
-In dev mode (`TB_DEV_MODE=true`), `basePath` is empty and `tbFetch` is a no-op — paths pass through unchanged. The prefix is derived at build time from `APP_SLUG` and inlined into the client bundle via `NEXT_PUBLIC_TB_APP_BASE_PATH` (also accessible via the `TB_APP_BASE_PATH` export from `@/lib/teambridge`) for the rare cases where you need to construct a same-origin URL manually.
+Import `tbFetch` (and `tbPath` / `TB_APP_BASE_PATH`) from their sub-paths rather than the top-level `@/lib/teambridge` barrel. The barrel also re-exports `TBProvider`, which imports `next/headers` and is server-only; pulling it into a Client Component's import graph trips Turbopack's server/client boundary check. Sub-path imports load only the helper itself.
+
+In dev mode (`TB_DEV_MODE=true`), `basePath` is empty and `tbFetch` is a no-op — paths pass through unchanged. The prefix is derived at build time from `APP_SLUG` and inlined into the client bundle via `NEXT_PUBLIC_TB_APP_BASE_PATH` (also accessible via `import { TB_APP_BASE_PATH } from '@/lib/teambridge/url'`) for the rare cases where you need to construct a same-origin URL manually.
 
 A few cases to be careful with manually:
 
-- Raw `<a href="/foo">` and `<form action="/foo">` — `basePath` only applies to Next.js's own primitives. For native HTML, prepend the prefix yourself with `tbPath()` if the URL needs to be same-origin.
+- Raw `<a href="/foo">` and `<form action="/foo">` — `basePath` only applies to Next.js's own primitives. For native HTML, prepend the prefix yourself with `tbPath()` (imported from `@/lib/teambridge/url`) if the URL needs to be same-origin.
 - Self-fetching your own route handlers from a server component. Don't; call the underlying logic directly instead (per [Vercel's guidance](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them)).
 - `lib/teambridge/client/TBClient.ts` deliberately uses raw `fetch` — it talks to external Teambridge APIs at absolute URLs, not to your app's own routes.
 

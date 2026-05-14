@@ -13,7 +13,7 @@ const tbProxyRules = {
     {
       selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
       message:
-        "Use tbFetch from '@/lib/teambridge' instead of bare fetch — it prepends the /apps/<slug> proxy prefix.",
+        "Use tbFetch from '@/lib/teambridge/fetch' instead of bare fetch — it prepends the /apps/<slug> proxy prefix.",
     },
   ],
 };
