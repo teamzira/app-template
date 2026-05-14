@@ -103,6 +103,19 @@ async function validateSignature(
 }
 
 /**
+ * zserver strips trailing slashes off non-root paths before signing, so we
+ * canonicalize to the same form before HMAC-comparing. With Next's
+ * `trailingSlash: true`, `request.nextUrl.pathname` for subpath requests
+ * comes through as e.g. `/dashboard/`, which would not match the
+ * `/dashboard` signature zserver computed.
+ */
+function canonicalizePathForSignature(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith('/')
+    ? pathname.slice(0, -1)
+    : pathname;
+}
+
+/**
  * Check if the request is too old (replay attack prevention)
  */
 function isRequestTooOld(timestamp: string, maxAge: number): boolean {
@@ -154,7 +167,7 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
         timestamp,
         accountId,
         userId,
-        pathname,
+        canonicalizePathForSignature(pathname),
         signature
       );
 
