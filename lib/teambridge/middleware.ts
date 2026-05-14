@@ -82,7 +82,6 @@ async function validateSignature(
   path: string,
   signature: string
 ): Promise<boolean> {
-  const message = `${timestamp}.${accountId}.${userId}.${path}`;
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -92,27 +91,27 @@ async function validateSignature(
     ['sign']
   );
 
-  const signatureBuffer = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    encoder.encode(message)
-  );
+  // zserver's path canonicalization for signing has historically stripped
+  // trailing slashes, but that's not guaranteed — accept either form so
+  // a mismatch on that single byte doesn't 401 an otherwise-valid request.
+  const withoutSlash =
+    path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  const withSlash = path.endsWith('/') ? path : `${path}/`;
+  const variants = withoutSlash === withSlash ? [path] : [withoutSlash, withSlash];
 
-  const expectedSignature = `sha256=${uint8ArrayToHex(new Uint8Array(signatureBuffer))}`;
-  return timingSafeCompare(signature, expectedSignature);
-}
-
-/**
- * zserver strips trailing slashes off non-root paths before signing, so we
- * canonicalize to the same form before HMAC-comparing. With Next's
- * `trailingSlash: true`, `request.nextUrl.pathname` for subpath requests
- * comes through as e.g. `/dashboard/`, which would not match the
- * `/dashboard` signature zserver computed.
- */
-function canonicalizePathForSignature(pathname: string): string {
-  return pathname.length > 1 && pathname.endsWith('/')
-    ? pathname.slice(0, -1)
-    : pathname;
+  for (const variant of variants) {
+    const message = `${timestamp}.${accountId}.${userId}.${variant}`;
+    const signatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(message)
+    );
+    const expectedSignature = `sha256=${uint8ArrayToHex(new Uint8Array(signatureBuffer))}`;
+    if (timingSafeCompare(signature, expectedSignature)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -167,7 +166,7 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
         timestamp,
         accountId,
         userId,
-        canonicalizePathForSignature(pathname),
+        pathname,
         signature
       );
 
