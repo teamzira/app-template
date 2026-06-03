@@ -14,7 +14,7 @@ export * from './types';
  * const collections = await client.collections.list();
  * ```
  */
-export function getTBClient() {
+export function getTBClient(userContext?: string | null) {
   const clientId = process.env.TB_CLIENT_ID;
   const clientSecret = process.env.TB_CLIENT_SECRET;
 
@@ -30,5 +30,6 @@ export function getTBClient() {
     baseUrl: process.env.TB_OPEN_API_BASE_URL,
     authUrl: process.env.TB_AUTH_URL,
     audience: process.env.TB_AUDIENCE,
+    userContext: userContext ?? undefined,
   });
 }
