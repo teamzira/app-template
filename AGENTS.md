@@ -165,7 +165,7 @@ All app data — shifts, users, jobs, placements, anything — lives in **collec
 
 ### API constraints
 
-- **Page size limit**: `records.list` enforces a max of **50 records per page** (default 20). Never request more in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < pageSize` or you've consumed `totalCount`.
+- **Page size limit**: the Teambridge API enforces a max of **50 records per page** (default 20). The template client forwards `pageSize` as the API's `size` query param; it does not clamp the value for you. Never request more than 50 in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < 50` or you've consumed `totalCount`.
 
 ### User-scoped Teambridge clients
 
@@ -193,7 +193,7 @@ Do not assume the first page is the full dataset. For data-heavy views, fetch an
 type PagedResponse<T> = {
   data: T[];
   page: number;
-  pageSize: number;
+  size: number;
   totalCount: number;
   hasMore: boolean;
 };
