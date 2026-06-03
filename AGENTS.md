@@ -165,7 +165,54 @@ All app data — shifts, users, jobs, placements, anything — lives in **collec
 
 ### API constraints
 
-- **Page size limit**: `records.list` enforces a max of **50 records per page** (default 20). Never request more in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < pageSize` or you've consumed `totalCount`.
+- **Page size limit**: the Teambridge API enforces a max of **50 records per page** (default 20). The template client forwards `pageSize` as the API's `size` query param; it does not clamp the value for you. Never request more than 50 in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < 50` or you've consumed `totalCount`.
+
+### User-scoped Teambridge clients
+
+For user-scoped reads and writes in Server Components, Server Actions, and app API routes, pass the signed Teambridge user context into the OpenAPI client:
+
+```ts
+import { getTBClient, getTBContext } from '@/lib/teambridge';
+
+export async function GET() {
+  const { userContext } = await getTBContext();
+  const client = getTBClient(userContext);
+  // ...
+}
+```
+
+Do **not** use a module-level singleton or plain `getTBClient()` for user-scoped collection operations. Embedded production requests include a signed `X-User-Context` header. `getTBContext()` reads that header on the server, and `getTBClient(userContext)` forwards it to OpenAPI so Teambridge evaluates collection access as the current embedded user. If you drop that context, the app can work locally but show empty or incorrectly scoped data in production.
+
+Use `getTBContext()` only in Server Components, Server Actions, and app API routes; it depends on `next/headers`. In Client Components, read current account/user metadata through `TBProvider` and `useTBContext()`. Client Components should call your app's API routes with `tbFetch()` rather than instantiating `TBClient` directly.
+
+### Large collection performance
+
+Do not assume the first page is the full dataset. For data-heavy views, fetch and filter records in API routes, then return a paged response to the browser:
+
+```ts
+type PagedResponse<T> = {
+  data: T[];
+  page: number;
+  size: number;
+  totalCount: number;
+  hasMore: boolean;
+};
+```
+
+Recommended pattern:
+
+- Scope records to the current Teambridge user before returning anything.
+- Fetch records in batches of 50.
+- Use page-based pagination with `page` and `pageSize`; this template's Teambridge client exposes those pagination inputs.
+- Deduplicate records by `id` when querying multiple owner/user aliases.
+- Enforce a max page cap and log when the cap is hit.
+- Return only the requested browser page, even if the backend scanned more records to compute exact counts or search matches.
+
+Search must also be backend-backed. Do not implement global or page-level search by filtering only the records currently loaded in the browser; that silently misses matches beyond the first 50 records. The client should send `search`, `page`, and `pageSize`; the API route should search the full current-user-scoped dataset and return `totalCount` / `hasMore`. If the app owns a database, use indexed database queries for search. If the app only uses Teambridge Collections, search in the API route after batched owner-scoped loading, with caching where appropriate.
+
+Board views need special care: do not derive columns or counts from only the first loaded page. Return group metadata from the server, such as `{ key, label, count }`, or load cards per group/column with a per-column "Load more". Field options are fine for select-like columns such as status, role, or candidate status; dynamic groups such as state, client, facility, or owner need server-computed group counts.
+
+Cache batched datasets carefully. Include owner/user scope, search, filters, archived flags, group-by fields, page size, and page in cache keys. Never cache unscoped collection results for user-specific views.
 
 ### Collection name matching
 
