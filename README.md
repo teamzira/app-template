@@ -2,7 +2,7 @@
 
 A starter template for building external apps that integrate with Teambridge.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_DEV_ACCOUNT_ID,TB_WEBHOOK_SECRET,APP_SLUG,V0_MODE&envDefaults=%7B%22TB_CLIENT_ID%22%3A%22Client%20ID%22%2C%22TB_CLIENT_SECRET%22%3A%22Client%20Secret%22%2C%22TB_DEV_ACCOUNT_ID%22%3A%22ID%20of%20account%20to%20use%20during%20development%22%2C%22TB_WEBHOOK_SECRET%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22APP_SLUG%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22V0_MODE%22%3A%22true%22%7D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_DEV_ACCOUNT_ID,TB_WEBHOOK_SECRET,APP_SLUG,V0_MODE,NODE_AUTH_TOKEN&envDefaults=%7B%22TB_CLIENT_ID%22%3A%22Client%20ID%22%2C%22TB_CLIENT_SECRET%22%3A%22Client%20Secret%22%2C%22TB_DEV_ACCOUNT_ID%22%3A%22ID%20of%20account%20to%20use%20during%20development%22%2C%22TB_WEBHOOK_SECRET%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22APP_SLUG%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22V0_MODE%22%3A%22true%22%2C%22NODE_AUTH_TOKEN%22%3A%22GitHub%20PAT%20with%20read%3Apackages%20%28for%20%40teamzira%20packages%29%22%7D)
 
 ## Getting Started
 
