@@ -4,7 +4,7 @@ Guidance for AI coding agents (Claude Code, v0, Cursor, etc.) and human contribu
 
 ## What this template is
 
-A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated locally via Tailwind tokens + shadcn/ui (no runtime dependency on the Alloy package).
+A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system**. Prefer the real **`@teamzira/alloy`** components first (installed by default); for anything Alloy doesn't provide, fall back to **shadcn/ui** (in `components/ui/`), styled on-brand via the Alloy Tailwind tokens.
 
 ## ⚠️ Example code — replace before shipping a real app
 
@@ -74,20 +74,27 @@ npx shadcn@latest add <name>
 
 Already installed: `alert`, `avatar`, `badge`, `button`, `card`, `checkbox`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `radio-group`, `scroll-area`, `select`, `separator`, `skeleton`, `sonner`, `switch`, `table`, `tabs`, `textarea`, `tooltip`.
 
-### Optional: real Alloy components (beyond shadcn)
+### Components: prefer Alloy, fall back to shadcn
 
-shadcn (above) + the Alloy tokens cover the common cases on-brand, and v0
-generates them reliably — **prefer them**. For a handful of patterns shadcn has
-no equivalent for (segmented control, trend/delta label, eyebrow, collapsible
-section, rich list row, color tag), the real `@teamzira/alloy` components are
-available. See [`docs/alloy-components.md`](docs/alloy-components.md) for the
-catalog, import paths, props, and examples.
+**Reach for a real `@teamzira/alloy` component first** whenever one fits the
+need — it's the actual design system. See
+[`docs/alloy-components.md`](docs/alloy-components.md) for the catalog, import
+paths, props, and examples. When editing in **Claude Code / Cursor**, the
+package's TypeScript types are read directly, so you get the exact current
+props — prefer that over the doc if they ever differ.
 
-Rules:
-- **Default to shadcn.** Only reach for an Alloy component when shadcn genuinely
-  has no equivalent — don't swap a working primitive just for parity.
-- These require the `@teamzira/alloy` package (private, needs GitHub Packages
-  auth). If a build/preview can't install it, fall back to shadcn.
+**Fall back to the shadcn primitives** (`components/ui/`, above) when Alloy has
+no equivalent — most generic form/layout primitives (`Input`, `Card`,
+`Popover`, `Skeleton`, …). They're styled on-brand via the Alloy tokens, so the
+look stays consistent either way. Never hand-roll raw HTML for either.
+
+Notes:
+- These components need the `@teamzira/alloy` package — a **default dependency**
+  here (private, GitHub Packages auth; see [`.npmrc`](.npmrc)). If a particular
+  build can't install it, shadcn is the safe fallback.
+- **v0 scaffolding tends to emit shadcn** — it can't author the private Alloy
+  components reliably. That's expected for the initial scaffold; prefer Alloy
+  when you refine the app in Claude Code / Cursor.
 
 ### Colors
 

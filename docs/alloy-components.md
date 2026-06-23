@@ -6,15 +6,16 @@ it's read automatically by Claude/Cursor in-repo).
 
 ## When to use these vs shadcn
 
-**Default to shadcn (`components/ui/`)** for anything with an equivalent — button,
-input, dialog, table, tabs, checkbox, avatar, badge, alert, tooltip, select,
-card. The Alloy tokens already make those look on-brand, and v0 generates them
-reliably.
+**Prefer a real Alloy component first** whenever one fits — it's the actual
+design system. This includes the no-shadcn-equivalent patterns below (segmented
+control, trend/delta label, eyebrow, collapsible section, rich list row, color
+tag), and the package also ships its own button, dialog, table, tabs, checkbox,
+select, etc. (`@teamzira/alloy/components/*`) if you want the exact Alloy
+component rather than the token-styled shadcn one.
 
-**Reach for a real Alloy component below only when shadcn has no equivalent** —
-segmented control, trend/delta label, eyebrow, collapsible section, rich list
-row, color tag. Don't swap a working shadcn primitive for an Alloy one just for
-parity.
+**Fall back to shadcn (`components/ui/`)** when Alloy has no equivalent — most
+generic form/layout primitives — or when a build can't install the private
+package. shadcn is styled on-brand via the Alloy tokens, so it stays consistent.
 
 ## Prerequisites
 
