@@ -30,10 +30,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
         env:
-          # Org-level secret with read:packages, granted to this repo. Falls back
-          # to the built-in GITHUB_TOKEN if you link the package to the repo
+          # read:packages token (org or repo secret named NODE_AUTH_TOKEN —
+          # same name as the .npmrc var and the Vercel env var). Falls back to
+          # the built-in GITHUB_TOKEN if you link the package to the repo
           # instead of using a PAT (see packages/alloy/README.md "CI auth").
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Lint
         run: yarn lint
