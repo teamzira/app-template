@@ -35,6 +35,11 @@ fi
 # 2) Ensure npm/yarn can authenticate to GitHub Packages (one-time, user-global).
 if ! grep -qs 'npm.pkg.github.com/:_authToken' "$HOME/.npmrc"; then
   echo "→ Adding GitHub Packages auth to ~/.npmrc (one-time dev setup)"
+  # If ~/.npmrc exists without a trailing newline, add one first so the auth
+  # line doesn't merge onto the previous line and corrupt it.
+  if [ -s "$HOME/.npmrc" ] && [ -n "$(tail -c1 "$HOME/.npmrc")" ]; then
+    echo >> "$HOME/.npmrc"
+  fi
   printf '//npm.pkg.github.com/:_authToken=%s\n' "$TOKEN" >> "$HOME/.npmrc"
 fi
 
@@ -59,17 +64,21 @@ if [ -f "$CSS" ] && ! grep -q '@teamzira/alloy/theme' "$CSS"; then
   ' "$CSS" > "$CSS.tmp" && mv "$CSS.tmp" "$CSS"
 fi
 
-# 5) Wire next.config.ts (idempotent).
+# 5) Wire next.config.ts. Two independent, idempotent steps — add the import and
+#    wrap the export — each guarded by its own marker so a partial state can't
+#    leave `withAlloy(...)` referenced without an import.
 NC="next.config.ts"
-if [ -f "$NC" ] && ! grep -q 'withAlloy' "$NC"; then
-  echo "→ Wiring $NC"
-  awk '
-    /^import type \{ NextConfig \} from "next";/ && !imp {
-      print; print "import { withAlloy } from \"@teamzira/alloy/next\";"; imp = 1; next
-    }
-    /^export default nextConfig;/ { print "export default withAlloy(nextConfig);"; next }
-    { print }
-  ' "$NC" > "$NC.tmp" && mv "$NC.tmp" "$NC"
+if [ -f "$NC" ]; then
+  if ! grep -q '@teamzira/alloy/next' "$NC"; then
+    echo "→ Wiring $NC (import)"
+    awk 'NR == 1 { print "import { withAlloy } from \"@teamzira/alloy/next\";" } { print }' \
+      "$NC" > "$NC.tmp" && mv "$NC.tmp" "$NC"
+  fi
+  if ! grep -q 'withAlloy(' "$NC"; then
+    echo "→ Wiring $NC (wrap export)"
+    awk '/^export default nextConfig;$/ { print "export default withAlloy(nextConfig);"; next } { print }' \
+      "$NC" > "$NC.tmp" && mv "$NC.tmp" "$NC"
+  fi
 fi
 
 # 6) Verify wiring; if a fork diverged from the expected anchors, give manual steps.
@@ -81,8 +90,10 @@ if [ -f "$CSS" ] && ! grep -q '@teamzira/alloy/theme' "$CSS"; then
   echo '    @source "../node_modules/@teamzira/alloy/src";'
   warn=1
 fi
-if [ -f "$NC" ] && ! grep -q 'withAlloy' "$NC"; then
-  echo "⚠ Could not auto-wire $NC. Import { withAlloy } from '@teamzira/alloy/next' and wrap your default export: export default withAlloy(nextConfig)"
+if [ -f "$NC" ] && { ! grep -q '@teamzira/alloy/next' "$NC" || ! grep -q 'withAlloy(' "$NC"; }; then
+  echo "⚠ Could not fully auto-wire $NC. Ensure it both imports and wraps:"
+  echo "    import { withAlloy } from '@teamzira/alloy/next'"
+  echo "    export default withAlloy(nextConfig)"
   warn=1
 fi
 
@@ -94,9 +105,10 @@ if [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VERCEL_PROJECT:-}" ]; then
   echo "→ Setting NODE_AUTH_TOKEN on Vercel project '${VERCEL_PROJECT}'"
   NODE_AUTH_TOKEN="$TOKEN" "$ROOT/scripts/setup-vercel-auth.sh"
 else
-  echo "⚠ This app now depends on a private package, so DEPLOYS need the token:"
-  echo "    • Vercel — set NODE_AUTH_TOKEN on the project (Settings → Env Vars, Production + Preview),"
-  echo "      or run:  VERCEL_TOKEN=… VERCEL_PROJECT=<project> ./scripts/setup-vercel-auth.sh"
-  echo "    • GitHub Actions CI — inherits the org NODE_AUTH_TOKEN secret automatically (nothing to do)."
+  echo "⚠ This app now depends on a private package, so its Vercel DEPLOY needs the token:"
+  echo "    set NODE_AUTH_TOKEN on the project (Settings → Env Vars, Production + Preview),"
+  echo "    or run:  VERCEL_TOKEN=… VERCEL_PROJECT=<project> ./scripts/setup-vercel-auth.sh"
 fi
-[ "$warn" = 0 ] || exit 0
+
+# Signal incomplete wiring so a caller/agent knows manual steps remain.
+[ "$warn" -eq 0 ] || exit 1

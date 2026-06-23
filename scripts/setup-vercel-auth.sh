@@ -13,7 +13,7 @@
 #
 # Required env vars:
 #   VERCEL_TOKEN     Vercel access token        -> https://vercel.com/account/tokens
-#   NODE_AUTH_TOKEN  read:packages GitHub PAT    (the same token used in CI / .npmrc)
+#   NODE_AUTH_TOKEN  read:packages GitHub PAT    (the same token used to install the package)
 #   VERCEL_PROJECT   the new project's name or id
 # Optional:
 #   VERCEL_TEAM      team id (team_…) if the project lives under a team
