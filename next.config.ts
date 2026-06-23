@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withAlloy } from "@teamzira/alloy/next";
 
 const isDevMode =
   process.env.TB_DEV_MODE === "true" ||
@@ -34,4 +35,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withAlloy(nextConfig);
