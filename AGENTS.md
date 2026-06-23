@@ -74,6 +74,21 @@ npx shadcn@latest add <name>
 
 Already installed: `alert`, `avatar`, `badge`, `button`, `card`, `checkbox`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `radio-group`, `scroll-area`, `select`, `separator`, `skeleton`, `sonner`, `switch`, `table`, `tabs`, `textarea`, `tooltip`.
 
+### Optional: real Alloy components (beyond shadcn)
+
+shadcn (above) + the Alloy tokens cover the common cases on-brand, and v0
+generates them reliably — **prefer them**. For a handful of patterns shadcn has
+no equivalent for (segmented control, trend/delta label, eyebrow, collapsible
+section, rich list row, color tag), the real `@teamzira/alloy` components are
+available. See [`docs/alloy-components.md`](docs/alloy-components.md) for the
+catalog, import paths, props, and examples.
+
+Rules:
+- **Default to shadcn.** Only reach for an Alloy component when shadcn genuinely
+  has no equivalent — don't swap a working primitive just for parity.
+- These require the `@teamzira/alloy` package (private, needs GitHub Packages
+  auth). If a build/preview can't install it, fall back to shadcn.
+
 ### Colors
 
 Two namespaces, both already wired into Tailwind:
