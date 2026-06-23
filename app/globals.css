@@ -1,18 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* @teamzira/alloy — design-system theme + component styles.
-   - theme:  `alloy-*` color utilities + `.alloy-*` typography classes that
-             Alloy components depend on. Fully `alloy-*`-namespaced, so it does
-             NOT collide with the shadcn/standard tokens defined below.
-   - styles: Catalyst overrides + `.alloy-icon-slot` rules for icon sizing. */
-@import "@teamzira/alloy/theme";
-@import "@teamzira/alloy/styles";
-
-/* Tailwind v4 doesn't scan node_modules by default. Point it at the Alloy
-   component sources so the utility classes they use get generated. */
-@source "../node_modules/@teamzira/alloy/src";
-
 /* shadcn-compatible dark variant: enable `dark:` utilities anywhere
    inside an element with the .dark class. */
 @custom-variant dark (&:is(.dark *));

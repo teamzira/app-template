@@ -4,7 +4,7 @@ Guidance for AI coding agents (Claude Code, v0, Cursor, etc.) and human contribu
 
 ## What this template is
 
-A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system**. Prefer the real **`@teamzira/alloy`** components first (installed by default); for anything Alloy doesn't provide, fall back to **shadcn/ui** (in `components/ui/`), styled on-brand via the Alloy Tailwind tokens.
+A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated via Tailwind tokens + shadcn/ui, with **no dependency on the `@teamzira/alloy` package by default** (so it clones and deploys with zero auth, and v0 generates on-brand automatically). Real Alloy components are an **opt-in** for the few cases shadcn has no equivalent — see "Components" below.
 
 ## ⚠️ Example code — replace before shipping a real app
 
@@ -74,27 +74,30 @@ npx shadcn@latest add <name>
 
 Already installed: `alert`, `avatar`, `badge`, `button`, `card`, `checkbox`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `radio-group`, `scroll-area`, `select`, `separator`, `skeleton`, `sonner`, `switch`, `table`, `tabs`, `textarea`, `tooltip`.
 
-### Components: prefer Alloy, fall back to shadcn
+### Components: shadcn replica by default; real Alloy is opt-in
 
-**Reach for a real `@teamzira/alloy` component first** whenever one fits the
-need — it's the actual design system. See
-[`docs/alloy-components.md`](docs/alloy-components.md) for the catalog, import
-paths, props, and examples. When editing in **Claude Code / Cursor**, the
-package's TypeScript types are read directly, so you get the exact current
-props — prefer that over the doc if they ever differ.
+**Default — use the shadcn primitives** (`components/ui/`, above). They're
+styled on-brand via the Alloy tokens, the template has no private dependency,
+and v0 generates them reliably. This covers the large majority of UI.
 
-**Fall back to the shadcn primitives** (`components/ui/`, above) when Alloy has
-no equivalent — most generic form/layout primitives (`Input`, `Card`,
-`Popover`, `Skeleton`, …). They're styled on-brand via the Alloy tokens, so the
-look stays consistent either way. Never hand-roll raw HTML for either.
+**Opt-in — real `@teamzira/alloy` components.** A handful of Alloy patterns have
+no shadcn equivalent (segmented control, trend/delta label, eyebrow, collapsible
+section, rich list row, color tag — see
+[`docs/alloy-components.md`](docs/alloy-components.md)). The package is **not**
+installed by default, so enable it first.
 
-Notes:
-- These components need the `@teamzira/alloy` package — a **default dependency**
-  here (private, GitHub Packages auth; see [`.npmrc`](.npmrc)). If a particular
-  build can't install it, shadcn is the safe fallback.
-- **v0 scaffolding tends to emit shadcn** — it can't author the private Alloy
-  components reliably. That's expected for the initial scaffold; prefer Alloy
-  when you refine the app in Claude Code / Cursor.
+> **Agent instruction (Claude Code / Cursor):** If the user asks for a real
+> Alloy component and `@teamzira/alloy` is **not** yet a dependency
+> (check `package.json`), run **`./scripts/enable-alloy.sh`** — it installs the
+> package and wires `globals.css` + `next.config.ts`. It needs a `read:packages`
+> token (`gh auth refresh -s read:packages`). Once enabled, import per
+> `docs/alloy-components.md`; the package's TypeScript types give exact props.
+
+Enabling makes `@teamzira/alloy` a dependency, so that fork's **Vercel deploy
+then needs `NODE_AUTH_TOKEN`** (the script reminds you; CI inherits the org
+secret automatically). Non-technical, replica-only apps never need any token.
+
+Never hand-roll raw HTML — use shadcn (or an enabled Alloy component).
 
 ### Colors
 

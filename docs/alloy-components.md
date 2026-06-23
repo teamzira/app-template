@@ -19,9 +19,11 @@ package. shadcn is styled on-brand via the Alloy tokens, so it stays consistent.
 
 ## Prerequisites
 
-- The package must be installed (`@teamzira/alloy`) with GitHub Packages auth
-  configured (see [`.npmrc`](../.npmrc)). v0's preview must be able to install
-  it; if a preview fails to install the private package, fall back to shadcn.
+- **The package is not installed by default — opt in first:** run
+  **`./scripts/enable-alloy.sh`** (installs `@teamzira/alloy`, wires
+  `globals.css` + `next.config.ts`). It needs a `read:packages` token
+  (`gh auth refresh -s read:packages`). After that, the fork's Vercel deploy
+  needs `NODE_AUTH_TOKEN` (the script reminds you).
 - Icons passed to `leadingIcon` come from the pre-bundled set and use `.Raw`:
   `import StarIcon from '@teamzira/alloy/icons-js/General/StarIcon'` → `<StarIcon.Raw />`.
 
