@@ -105,9 +105,10 @@ if [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VERCEL_PROJECT:-}" ]; then
   echo "→ Setting NODE_AUTH_TOKEN on Vercel project '${VERCEL_PROJECT}'"
   NODE_AUTH_TOKEN="$TOKEN" "$ROOT/scripts/setup-vercel-auth.sh"
 else
-  echo "⚠ This app now depends on a private package, so its Vercel DEPLOY needs the token:"
-  echo "    set NODE_AUTH_TOKEN on the project (Settings → Env Vars, Production + Preview),"
-  echo "    or run:  VERCEL_TOKEN=… VERCEL_PROJECT=<project> ./scripts/setup-vercel-auth.sh"
+  echo "⚠ This app now depends on a private package, so its Vercel DEPLOY needs NODE_AUTH_TOKEN:"
+  echo "    • easiest — in Vercel, LINK the team's shared NODE_AUTH_TOKEN variable to this"
+  echo "      project (Settings → Environment Variables; no value to paste — it's stored once), or"
+  echo "    • automate it:  VERCEL_TOKEN=… VERCEL_PROJECT=<project> ./scripts/setup-vercel-auth.sh"
 fi
 
 # Signal incomplete wiring so a caller/agent knows manual steps remain.

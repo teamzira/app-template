@@ -94,8 +94,9 @@ installed by default, so enable it first.
 > `docs/alloy-components.md`; the package's TypeScript types give exact props.
 
 Enabling makes `@teamzira/alloy` a dependency, so that fork's **Vercel deploy
-then needs `NODE_AUTH_TOKEN`** (the script reminds you / sets it). Non-technical,
-replica-only apps never need any token.
+then needs `NODE_AUTH_TOKEN`** — easiest is to **link the team's shared
+`NODE_AUTH_TOKEN` variable** to the project (no value to paste; the script
+reminds you). Non-technical, replica-only apps never need any token.
 
 Never hand-roll raw HTML — use shadcn (or an enabled Alloy component).
 
