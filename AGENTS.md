@@ -4,7 +4,7 @@ Guidance for AI coding agents (Claude Code, v0, Cursor, etc.) and human contribu
 
 ## What this template is
 
-A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated locally via Tailwind tokens + shadcn/ui (no runtime dependency on the Alloy package).
+A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated via Tailwind tokens + shadcn/ui, with **no dependency on the `@teamzira/alloy` package by default** (so it clones and deploys with zero auth, and v0 generates on-brand automatically). Real Alloy components are an **opt-in** for the few cases shadcn has no equivalent — see "Components" below.
 
 ## ⚠️ Example code — replace before shipping a real app
 
@@ -73,6 +73,32 @@ npx shadcn@latest add <name>
 ```
 
 Already installed: `alert`, `avatar`, `badge`, `button`, `card`, `checkbox`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `radio-group`, `scroll-area`, `select`, `separator`, `skeleton`, `sonner`, `switch`, `table`, `tabs`, `textarea`, `tooltip`.
+
+### Components: shadcn replica by default; real Alloy is opt-in
+
+**Default — use the shadcn primitives** (`components/ui/`, above). They're
+styled on-brand via the Alloy tokens, the template has no private dependency,
+and v0 generates them reliably. This covers the large majority of UI.
+
+**Opt-in — real `@teamzira/alloy` components.** A handful of Alloy patterns have
+no shadcn equivalent (segmented control, trend/delta label, eyebrow, collapsible
+section, rich list row, color tag — see
+[`docs/alloy-components.md`](docs/alloy-components.md)). The package is **not**
+installed by default, so enable it first.
+
+> **Agent instruction (Claude Code / Cursor):** If the user asks for a real
+> Alloy component and `@teamzira/alloy` is **not** yet a dependency
+> (check `package.json`), run **`./scripts/enable-alloy.sh`** — it installs the
+> package and wires `globals.css` + `next.config.ts`. It needs a `read:packages`
+> token (`gh auth refresh -s read:packages`). Once enabled, import per
+> `docs/alloy-components.md`; the package's TypeScript types give exact props.
+
+Enabling makes `@teamzira/alloy` a dependency, so that fork's **Vercel deploy
+then needs `NODE_AUTH_TOKEN`** — easiest is to **link the team's shared
+`NODE_AUTH_TOKEN` variable** to the project (no value to paste; the script
+reminds you). Non-technical, replica-only apps never need any token.
+
+Never hand-roll raw HTML — use shadcn (or an enabled Alloy component).
 
 ### Colors
 
