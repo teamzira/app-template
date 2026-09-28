@@ -3,10 +3,12 @@
 /**
  * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
  */
-import { getTBContext, TBClient, getCredentialsForAccount } from '@/lib/teambridge';
-import type { Field } from '@/lib/teambridge/client/types';
+import { getTBContext, getTBClient, TBApiError } from '@/lib/teambridge';
+import { resolveSchema, toWriteValue } from '@/lib/teambridge/schema';
+import { schema } from './schema';
 
 export async function createShift(formData: FormData) {
+  // Already ISO strings with a timezone — the modal converts them in the browser.
   const startTime = formData.get('startTime') as string | null;
   const endTime = formData.get('endTime') as string | null;
   const assignee = (formData.get('assignee') as string | null)?.trim() || null;
@@ -18,56 +20,34 @@ export async function createShift(formData: FormData) {
     return { error: 'End time must be after start time.' };
   }
 
-  const { userContext } = await getTBContext();
-  const credentials = getCredentialsForAccount();
-
-  if (!credentials) {
-    return { error: 'No credentials found for this account.' };
-  }
+  const { accountId, userContext } = await getTBContext();
 
   try {
-    const client = new TBClient({
-      clientId: credentials.clientId,
-      clientSecret: credentials.clientSecret,
-      baseUrl: process.env.TB_OPEN_API_BASE_URL!,
-      authUrl: process.env.TB_AUTH_URL!,
-      audience: process.env.TB_AUDIENCE!,
-      userContext,
-    });
-
-    // Find the shifts collection
-    const collections = await client.collections.list();
-    const shiftsCollection = collections.find(
-      (c) => c.name.toLowerCase() === 'shifts'
-    );
-
-    if (!shiftsCollection) {
-      return { error: 'No Shifts collection found. Create one in Teambridge first.' };
+    const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+    const shifts = resolved.collections.shifts;
+    const { start, end, assignee: assigneeField } = shifts.fields;
+    if (!resolved.ready || !shifts.id || !start || !end) {
+      return { error: "Can't create shifts yet: the Shifts collection is missing fields this app needs." };
     }
 
-    // Get field definitions to map names to IDs
-    const fields: Field[] = await client.collections.getFields(shiftsCollection.id);
-    const startField = fields.find((f) => f.name === 'Start Time');
-    const endField = fields.find((f) => f.name === 'End Time');
-    const assigneeField = fields.find((f) => f.name === 'Assignee');
-
-    if (!startField || !endField) {
-      return { error: 'Shifts collection is missing Start Time or End Time fields.' };
-    }
-
-    // Build the record data using field IDs
+    // Write as the current user, so Teambridge applies their permissions.
+    const client = getTBClient(userContext);
     const recordData: Record<string, unknown> = {
-      [startField.id]: new Date(startTime).toISOString(),
-      [endField.id]: new Date(endTime).toISOString(),
+      [start.id]: toWriteValue(start, startTime),
+      [end.id]: toWriteValue(end, endTime),
     };
-    if (assignee && assigneeField) {
-      recordData[assigneeField.id] = assignee;
+    if (assignee && assigneeField && !assigneeField.readOnly) {
+      recordData[assigneeField.id] = toWriteValue(assigneeField, assignee);
     }
 
-    await client.collections.records.create(shiftsCollection.id, recordData);
-
+    await client.collections.records.create(shifts.id, recordData);
     return { success: true };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Failed to create shift.' };
+    // Log the full error for debugging; show the user something specific.
+    console.error('[createShift]', e);
+    if (e instanceof TBApiError && e.status === 403) {
+      return { error: "You don't have permission to create shifts." };
+    }
+    return { error: "Couldn't save the shift. Check the values and try again." };
   }
 }
