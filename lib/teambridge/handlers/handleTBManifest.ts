@@ -1,40 +1,20 @@
 import { NextResponse } from 'next/server';
-import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
 import { manifestJson, type AppManifest } from '../manifest';
+import { hasValidSignature, isTimestampTooOld } from './signature';
+
+function hashOf(json: string): string {
+  return createHash('sha256').update(json).digest('hex').slice(0, 16);
+}
 
 /**
  * Content hash of an app manifest: the first 16 hex characters of the
  * SHA-256 of its JSON. Teambridge stores the hash of the manifest an account
  * was installed against and sends it back as `manifestVersion` on the install
- * webhook, so the app can tell when an account is behind its current manifest.
+ * webhook; `handleTBInstall` compares the two when given the manifest.
  */
 export function manifestHash(manifest: AppManifest): string {
-  return createHash('sha256').update(manifestJson(manifest)).digest('hex').slice(0, 16);
-}
-
-/**
- * The message Teambridge signs when it fetches the manifest. It names the
- * purpose rather than the URL path: the app is served under `/apps/<slug>`
- * behind the proxy and at `/` in dev, so a signed path would differ between
- * the two for the same request.
- */
-function signedMessage(timestamp: string): string {
-  return `${timestamp}.manifest`;
-}
-
-function validSignature(webhookSecret: string, timestamp: string, signature: string): boolean {
-  const expected = createHmac('sha256', webhookSecret).update(signedMessage(timestamp)).digest('hex');
-  try {
-    return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
-
-function isTooOld(timestamp: string, maxAgeSeconds: number): boolean {
-  const sentAt = Number.parseInt(timestamp, 10);
-  if (!Number.isFinite(sentAt)) return true;
-  return Math.abs(Math.floor(Date.now() / 1000) - sentAt) > maxAgeSeconds;
+  return hashOf(manifestJson(manifest));
 }
 
 interface TBManifestHandlerConfig {
@@ -52,6 +32,9 @@ interface TBManifestHandlerConfig {
  *  - `GET <app base URL>/api/teambridge/manifest`
  *  - Headers `X-TB-Timestamp` (unix seconds) and `X-TB-Signature`: the hex
  *    HMAC-SHA256 of `"<timestamp>.manifest"` with the app's webhook secret.
+ *    The message names the purpose rather than the URL path: the app is
+ *    served under `/apps/<slug>` behind the proxy and at `/` in dev, so a
+ *    signed path would differ between the two for the same request.
  *  - 200 with the manifest JSON (byte-identical to `teambridge.manifest.json`)
  *    and `ETag: "<manifestHash>"`; 304 when `If-None-Match` carries that ETag.
  *
@@ -66,10 +49,24 @@ interface TBManifestHandlerConfig {
 export function handleTBManifest(config: TBManifestHandlerConfig, manifest: AppManifest) {
   const { webhookSecret, maxRequestAge = 300 } = config;
 
-  return async function handler(request: Request) {
-    const isDevMode = process.env.TB_DEV_MODE === 'true';
+  // The manifest is fixed for the life of the deployment, so build and hash
+  // it once, on the first request. A spec problem (the same one `yarn
+  // manifest` reports, so the build normally catches it) is kept too.
+  let served: { body: string; etag: string } | { error: unknown } | undefined;
+  const serve = () => {
+    if (!served) {
+      try {
+        const body = manifestJson(manifest);
+        served = { body, etag: `"${hashOf(body)}"` };
+      } catch (error) {
+        served = { error };
+      }
+    }
+    return served;
+  };
 
-    if (!isDevMode) {
+  return async function handler(request: Request) {
+    if (process.env.TB_DEV_MODE !== 'true') {
       const timestamp = request.headers.get('x-tb-timestamp');
       const signature = request.headers.get('x-tb-signature');
       if (!webhookSecret) {
@@ -79,31 +76,25 @@ export function handleTBManifest(config: TBManifestHandlerConfig, manifest: AppM
       if (!timestamp || !signature) {
         return NextResponse.json({ error: 'Missing required headers' }, { status: 401 });
       }
-      if (isTooOld(timestamp, maxRequestAge)) {
+      if (isTimestampTooOld(timestamp, maxRequestAge)) {
         return NextResponse.json({ error: 'Request too old' }, { status: 401 });
       }
-      if (!validSignature(webhookSecret, timestamp, signature)) {
+      if (!hasValidSignature(webhookSecret, `${timestamp}.manifest`, signature)) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     }
 
-    let body: string;
-    let etag: string;
-    try {
-      body = manifestJson(manifest);
-      etag = `"${manifestHash(manifest)}"`;
-    } catch (error) {
-      // A spec problem — the same one `yarn manifest` reports, so the build
-      // normally catches it first.
-      console.error('[Teambridge] The app manifest is invalid:', error);
+    const result = serve();
+    if ('error' in result) {
+      console.error('[Teambridge] The app manifest is invalid:', result.error);
       return NextResponse.json({ error: 'The app manifest is invalid' }, { status: 500 });
     }
 
-    const headers = { ETag: etag, 'Cache-Control': 'no-cache' };
-    if (request.headers.get('if-none-match') === etag) {
+    const headers = { ETag: result.etag, 'Cache-Control': 'no-cache' };
+    if (request.headers.get('if-none-match') === result.etag) {
       return new NextResponse(null, { status: 304, headers });
     }
-    return new NextResponse(body, {
+    return new NextResponse(result.body, {
       status: 200,
       headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' },
     });

@@ -7,6 +7,7 @@ export type {
   TBInstallPayload,
   TBUninstallPayload,
   TBHandlerConfig,
+  TBInstallHandlerConfig,
   TBInstallContext,
   TBUninstallContext,
 } from './types';
