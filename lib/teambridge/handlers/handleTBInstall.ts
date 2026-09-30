@@ -105,6 +105,7 @@ export function handleTBInstall(
         accountId: payload.accountId,
         apiToken: payload.apiToken,
         apiBaseUrl: payload.apiBaseUrl,
+        manifestVersion: payload.manifestVersion,
       });
 
       return NextResponse.json(result, {

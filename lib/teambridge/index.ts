@@ -53,7 +53,7 @@ export type {
 } from './client';
 
 // Handlers
-export { handleTBInstall, handleTBUninstall } from './handlers';
+export { handleTBInstall, handleTBUninstall, handleTBManifest, manifestHash } from './handlers';
 
 // URL + fetch helpers live at their own sub-paths so they're importable from
 // Client Components without pulling the rest of the barrel — which includes

@@ -53,6 +53,13 @@ export interface TBInstallPayload {
   apiToken: string;
   /** Base URL for Teambridge API */
   apiBaseUrl: string;
+  /**
+   * Hash of the app manifest this account was installed against (the
+   * manifest route's ETag, without quotes). Absent until Teambridge sends it.
+   * Compare with `manifestHash(manifest)` to tell an account that is behind
+   * the app's current manifest.
+   */
+  manifestVersion?: string;
 }
 
 /**

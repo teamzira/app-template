@@ -373,6 +373,10 @@ A link field's target collection is added automatically (`std.user` for a `LINK_
 
 **Generate and commit it.** `yarn manifest` writes `teambridge.manifest.json` in the install service's format. Commit it, so a change to what the app needs shows up in review. `yarn build` runs `yarn manifest:check` first and fails if the file is stale. Any spec problem — a field without exactly one `type`, a system-managed type, `options` on a non-select — fails the command with every problem listed.
 
+**Teambridge reads it from the app.** `app/api/teambridge/manifest/route.ts` serves the same JSON at `GET /api/teambridge/manifest`. Teambridge fetches it when the app is registered or updated, so nobody pastes it in by hand. The request is signed with the app's webhook secret (`X-TB-Timestamp`, plus `X-TB-Signature` = hex HMAC-SHA256 of `"<timestamp>.manifest"`). The response carries `ETag: "<manifestHash>"` and answers 304 when nothing changed. In dev mode it's served unsigned, so `curl localhost:3000/api/teambridge/manifest/` gives you JSON to paste into the install lab. Keep the route: it's part of the template, like the install webhook.
+
+**Knowing which manifest an account has.** The install webhook's context carries `manifestVersion`, the hash of the manifest that account was installed against. Compare it with `manifestHash(manifest)` to spot an account that is behind the app. The template's install route logs a warning when they differ. Teambridge doesn't send `manifestVersion` yet, so treat it as optional.
+
 **Workflows.** `workflows` lists workflow templates (by template-library slug) to install with the app. The manifest records them now; the install service will offer them in the same install once it supports that.
 
 **Today, the app still resolves by name at runtime.** The install records the mapping, but an app can't read it back yet, so `resolveSchema` keeps matching by name (plus any pinned ids). Declaring `synonyms` doesn't change runtime lookups — keep `name` equal to what the account calls the field.
@@ -483,6 +487,7 @@ scripts/manifest.ts   # The generator
   globals.css         # Alloy tokens + Tailwind theme bridge — keep
   api/teambridge/
     install/route.ts  # Lifecycle webhook
+    manifest/route.ts # Serves the install manifest to Teambridge (signed)
     uninstall/route.ts
 components/ui/        # shadcn primitives (own them, edit freely)
 lib/
