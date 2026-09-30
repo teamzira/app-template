@@ -14,6 +14,7 @@ These files exist only as a working demonstration of how to read Teambridge data
 - `app/create-shift-modal.tsx` — sample modal (delete or replace)
 - `app/actions.ts` — sample server action (delete or replace)
 - `app/schema.ts` — sample schema spec (replace with your app's collections and fields)
+- `teambridge.manifest.ts` — sample install manifest (replace the slug, title and summary)
 
 When the user starts building their actual app, **replace this content** before adding real features. Don't extend the demo — start fresh from these files.
 
@@ -306,9 +307,8 @@ import { defineSchema } from '@/lib/teambridge/schema';
 export const schema = defineSchema({
   shifts: {
     name: 'Shifts',
-    id: '6d1f…',                                   // pin once known
     fields: {
-      start:    { name: 'Start Time', type: 'DATETIME', required: true, id: 'a41c…' },
+      start:    { name: 'Start Time', type: 'DATETIME', required: true },
       location: { name: 'Location', type: 'LINK_TO_LOCATION' },
     },
   },
@@ -321,7 +321,8 @@ if (!resolved.ready) { /* render a setup notice from resolved.issues */ }
 const start = resolved.collections.shifts.fields.start; // Field | null
 ```
 
-- **Names find things, ids keep them.** Admins rename fields ("Location" becomes "Facility"), and an app that matches names on every request breaks when they do. After the first run against the real account, copy the resolved ids into the spec. A pinned id wins, and the name stays as the fallback and the readable label. A rename then shows up as a non-blocking `renamed` issue, not an outage.
+- **Names find things, ids keep them — but ids belong to one account.** Admins rename fields ("Location" becomes "Facility"), and an app that matches names on every request breaks when they do. A spec entry can carry a pinned `id`, which wins over the name, and a rename then shows up as a non-blocking `renamed` issue instead of an outage. Every account has different ids, though, so **pin ids only in an app built for a single account** (copy them in after the first run against it). An app installed into many accounts leaves `id` out: its install maps each spec key to that account's objects (see "Install manifest").
+- **Keys are forever.** The spec keys (`shifts`, `start`) are the app's names for these things, and they are the requirement keys every installed account's mapping is stored under. Rename the `name` freely; don't rename a key.
 - **Names are not unique.** One collection can have two fields with the same name (e.g. a BOOLEAN and a MULTI_SELECT both called "Affiliate Vendor"). Give each spec a `type` so the resolver picks the right one. Otherwise which one you get depends on the order the API returns them in.
 - **Use the exact name.** Look at the real field list rather than guessing: it is "Roles", not "role", and "Location", not "facility". A field that doesn't resolve is always `null`, so every read of it silently yields nothing. The resolver reports it instead.
 - **Resolve with the app client** (`getTBClient()` with no user context) and cache by `accountId`. The schema is account structure, not user data. Never use `userContext` as a cache key: it is re-signed on every request, so nothing would ever hit.
@@ -332,7 +333,49 @@ Accounts differ, so plan for the one that lacks a field the app wants:
 
 1. Mark it `required: true` only if the app truly can't work without it. Otherwise leave it optional and degrade the feature that uses it: hide the column, disable the action.
 2. When `resolved.ready` is false, render a setup notice listing `resolved.issues` (see `SetupNotice` in `app/page.tsx`). Each message names the collection, field and type to add, so an admin can fix it without reading code.
-3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values. Creating the missing fields during app onboarding is planned, but not built yet.
+3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values.
+4. Give the spec entry what an installer needs — `purpose`, `synonyms`, and `createIfMissing: true` for a field it's fine to add — so the install flow can find it under another name or offer to create it (see "Install manifest").
+
+### Install manifest
+
+Before an app is installed, Teambridge's install service checks the account for everything the app needs: it matches each collection and field to what the account already has (by kind, name, synonyms and type), offers to create missing fields, lets the admin confirm, and records the mapping. The app declares what it needs in `teambridge.manifest.ts`, which wraps the schema spec — so the code that reads a field and the manifest that installs it are the same declaration:
+
+```ts
+// teambridge.manifest.ts (repo root — `app/manifest.ts` is Next's web app manifest, a different thing)
+import { defineAppManifest } from '@/lib/teambridge/manifest';
+import { schema } from './app/schema';
+
+export default defineAppManifest({
+  slug: 'shifts-dashboard',        // the app's APP_SLUG
+  title: 'Shifts dashboard',
+  summary: 'Lists shifts with their assignees and creates new ones.',
+  requires: schema,
+  workflows: [{ template: 'shift-reminder' }], // optional; see below
+});
+```
+
+What each spec entry contributes:
+
+| Spec | Manifest |
+|---|---|
+| collection `standard: 'user'` (or `shift`, `location`, `role`, `job`, `placement`, …) | Matched to the built-in collection, whatever the account calls it |
+| collection without `standard` | A custom collection, matched by `name` and `synonyms`. The installer can't create collections, so a missing one is set up by hand |
+| field `type` (exactly one, Open API name) | The field type to match and, if allowed, create. System-managed types (COMPUTED, AGGREGATE, ADDRESS…) can't be declared |
+| `required` | A missing required field blocks install; an optional one can be skipped |
+| `access: 'write'` | Only writable fields match |
+| `createIfMissing: true` | The installer may create it when nothing fits |
+| `options: ['Open', 'Filled']` on a select | The options the app relies on, matched or created too |
+| `multiple: true` on a link | A multi link (several records) |
+| `links: '<collection key>'` on a `CUSTOM_FIELD` | Which declared collection the link points at |
+| `purpose`, `synonyms` | Shown to the admin; synonyms also match fields named differently ("Payroll ID" for "Employee ID") |
+
+A link field's target collection is added automatically (`std.user` for a `LINK_TO_USER`) when the spec doesn't declare it.
+
+**Generate and commit it.** `yarn manifest` writes `teambridge.manifest.json` in the install service's format. Commit it, so a change to what the app needs shows up in review. `yarn build` runs `yarn manifest:check` first and fails if the file is stale. Any spec problem — a field without exactly one `type`, a system-managed type, `options` on a non-select — fails the command with every problem listed.
+
+**Workflows.** `workflows` lists workflow templates (by template-library slug) to install with the app. The manifest records them now; the install service will offer them in the same install once it supports that.
+
+**Today, the app still resolves by name at runtime.** The install records the mapping, but an app can't read it back yet, so `resolveSchema` keeps matching by name (plus any pinned ids). Declaring `synonyms` doesn't change runtime lookups — keep `name` equal to what the account calls the field.
 
 ### Collection name matching
 
@@ -434,6 +477,9 @@ app/
   layout.tsx          # Root layout, TBProvider wired in
   page.tsx            # ⚠ Example — replace
   schema.ts           # ⚠ Example — your app's collections + fields
+teambridge.manifest.ts    # ⚠ Example — install manifest (slug, title, summary, requires)
+teambridge.manifest.json  # Generated by `yarn manifest` — commit it
+scripts/manifest.ts   # The generator
   globals.css         # Alloy tokens + Tailwind theme bridge — keep
   api/teambridge/
     install/route.ts  # Lifecycle webhook
@@ -443,6 +489,7 @@ lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
     schema.ts         # defineSchema / resolveSchema / toWriteValue / readIds
+    manifest.ts       # defineAppManifest / buildRequirementManifest
     router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher
     fetch.ts, url.ts  # tbFetch / tbPath for the /apps/<slug> base path
   utils.ts            # cn() helper

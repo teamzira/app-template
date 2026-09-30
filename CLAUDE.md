@@ -22,13 +22,14 @@ For changes in those areas, say plainly that they need checking in the embedded 
 
 ### Ask about the account, don't guess
 
-- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them.
+- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`. Pin ids only if the app is for a single account; ask if you don't know.
 - If the account is missing a field or collection the feature needs, tell the user which ones to add and with what type, and build the feature to degrade (see AGENTS.md → "When a field or collection doesn't exist"). Don't substitute a similarly named field.
 - Ask before assuming anything about business rules: which shifts count, which statuses mean "done", who should see what.
 
 ### Before you finish
 
 - `yarn typecheck` and `yarn lint` pass. The lint rule against bare `fetch` is intentional; use `tbFetch`.
+- If you changed `app/schema.ts` or `teambridge.manifest.ts`, run `yarn manifest` and include `teambridge.manifest.json` in the change. Never rename a spec key to tidy it up — keys are what installed accounts are mapped by.
 - No new hex colors, raw `<button>`/`<input>`, or `min-h-screen` (see AGENTS.md → "Common mistakes").
 - New pages handle loading, error and empty states, and a setup notice when the schema isn't ready.
 - Error copy never says the app can't connect to Teambridge.

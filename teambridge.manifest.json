@@ -1,0 +1,145 @@
+{
+  "sourceType": "APP",
+  "sourceId": "shifts-dashboard",
+  "version": 1,
+  "title": "Shifts dashboard",
+  "summary": "Lists shifts with their assignees, splits published from draft, and creates new shifts.",
+  "requirements": [
+    {
+      "key": "shifts",
+      "kind": "COLLECTION",
+      "label": "Shifts",
+      "descriptor": {
+        "kind": "collection",
+        "collectionType": "custom"
+      },
+      "purpose": "The shifts the dashboard lists and creates.",
+      "synonyms": [],
+      "required": true,
+      "createIfMissing": false
+    },
+    {
+      "key": "shifts.start",
+      "kind": "FIELD",
+      "parentKey": "shifts",
+      "label": "Start Time",
+      "descriptor": {
+        "kind": "field",
+        "type": "datetime",
+        "inputMode": "plain",
+        "constraints": [
+          "WRITABLE"
+        ]
+      },
+      "purpose": "When each shift starts.",
+      "synonyms": [
+        "Start",
+        "Starts At"
+      ],
+      "required": true,
+      "createIfMissing": false
+    },
+    {
+      "key": "shifts.end",
+      "kind": "FIELD",
+      "parentKey": "shifts",
+      "label": "End Time",
+      "descriptor": {
+        "kind": "field",
+        "type": "datetime",
+        "inputMode": "plain",
+        "constraints": [
+          "WRITABLE"
+        ]
+      },
+      "purpose": "When each shift ends.",
+      "synonyms": [
+        "End",
+        "Ends At"
+      ],
+      "required": true,
+      "createIfMissing": false
+    },
+    {
+      "key": "shifts.assignee",
+      "kind": "FIELD",
+      "parentKey": "shifts",
+      "label": "Assignee",
+      "descriptor": {
+        "kind": "field",
+        "type": "user",
+        "inputMode": "single",
+        "refCollectionKey": "users",
+        "constraints": [
+          "WRITABLE",
+          "RELATION"
+        ]
+      },
+      "purpose": "Who is working the shift.",
+      "synonyms": [
+        "Worker",
+        "Assigned To"
+      ],
+      "required": false,
+      "createIfMissing": true
+    },
+    {
+      "key": "shifts.published",
+      "kind": "FIELD",
+      "parentKey": "shifts",
+      "label": "Published",
+      "descriptor": {
+        "kind": "field",
+        "type": "boolean",
+        "inputMode": "plain"
+      },
+      "purpose": "Splits published shifts from drafts.",
+      "synonyms": [],
+      "required": false,
+      "createIfMissing": true
+    },
+    {
+      "key": "users",
+      "kind": "COLLECTION",
+      "label": "Users",
+      "descriptor": {
+        "kind": "collection",
+        "collectionType": "user"
+      },
+      "synonyms": [],
+      "required": false,
+      "createIfMissing": false
+    },
+    {
+      "key": "users.firstName",
+      "kind": "FIELD",
+      "parentKey": "users",
+      "label": "First Name",
+      "descriptor": {
+        "kind": "field",
+        "type": "text",
+        "inputMode": "plain"
+      },
+      "purpose": "Shows who a shift is assigned to.",
+      "synonyms": [],
+      "required": false,
+      "createIfMissing": false
+    },
+    {
+      "key": "users.lastName",
+      "kind": "FIELD",
+      "parentKey": "users",
+      "label": "Last Name",
+      "descriptor": {
+        "kind": "field",
+        "type": "text",
+        "inputMode": "plain"
+      },
+      "purpose": "Shows who a shift is assigned to.",
+      "synonyms": [],
+      "required": false,
+      "createIfMissing": false
+    }
+  ],
+  "workflows": []
+}
