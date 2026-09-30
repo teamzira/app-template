@@ -1,4 +1,4 @@
-import type { CollectionSpec, FieldSpec, SchemaSpec, StandardCollection } from './schema';
+import type { CollectionSpec, SchemaSpec, StandardCollection } from './schema';
 
 /**
  * An app's install manifest: what it needs from an account, declared once.
@@ -18,7 +18,7 @@ import type { CollectionSpec, FieldSpec, SchemaSpec, StandardCollection } from '
  * stable names for these things — renaming a key is a new requirement to every
  * account the app is already installed in, so treat keys like an API.
  */
-export interface AppManifest<S extends SchemaSpec = SchemaSpec> {
+export interface AppManifest {
   /** The app's slug in the Teambridge app registry (the `APP_SLUG` it is served at). */
   slug: string;
   /** Shown to the admin installing the app. */
@@ -26,7 +26,7 @@ export interface AppManifest<S extends SchemaSpec = SchemaSpec> {
   /** One or two sentences on what the app does and why it needs what it needs. */
   summary: string;
   /** The collections and fields the app reads and writes — usually `schema` from `app/schema.ts`. */
-  requires: S;
+  requires: SchemaSpec;
   /**
    * Workflow templates to install alongside the app, by template-library slug.
    * Recorded in the manifest now; the install service picks them up once it
@@ -35,7 +35,7 @@ export interface AppManifest<S extends SchemaSpec = SchemaSpec> {
   workflows?: Array<{ template: string; required?: boolean }>;
 }
 
-export function defineAppManifest<S extends SchemaSpec>(manifest: AppManifest<S>): AppManifest<S> {
+export function defineAppManifest(manifest: AppManifest): AppManifest {
   return manifest;
 }
 
@@ -219,7 +219,8 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         }
       }
 
-      const optionKeys = (field.options ?? []).map((option) => `${key}.${slugify(option)}`);
+      const options = (field.options ?? []).map((label) => ({ key: `${key}.${slugify(label)}`, label }));
+      const optionKeys = options.map((option) => option.key);
       const constraints: FieldConstraint[] = [];
       if (field.access === 'write') constraints.push('WRITABLE');
       if (isSelect) constraints.push('SELECTION');
@@ -244,12 +245,12 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         createIfMissing: Boolean(field.createIfMissing),
       });
 
-      (field.options ?? []).forEach((option, index) => {
+      for (const option of options) {
         requirements.push({
-          key: optionKeys[index],
+          key: option.key,
           kind: 'SELECT_OPTION',
           parentKey: key,
-          label: option,
+          label: option.label,
           descriptor: { kind: 'selectOption' },
           purpose: `An option of ${field.name}.`,
           synonyms: [],
@@ -257,7 +258,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
           required,
           createIfMissing: Boolean(field.createIfMissing),
         });
-      });
+      }
     }
   }
 
@@ -302,10 +303,12 @@ function collectionRequirement(key: string, collection: CollectionSpec, required
   };
 }
 
-/** The manifest as stable, pretty-printed JSON — what `teambridge.manifest.json` holds. */
-export function manifestJson(manifest: AppManifest): string {
-  return `${JSON.stringify(buildRequirementManifest(manifest), null, 2)}\n`;
+/** A built manifest as stable, pretty-printed JSON — what `teambridge.manifest.json` holds. */
+export function serializeManifest(requirementManifest: RequirementManifest): string {
+  return `${JSON.stringify(requirementManifest, null, 2)}\n`;
 }
 
-// Re-exported so `teambridge.manifest.ts` needs a single import.
-export type { FieldSpec, CollectionSpec, SchemaSpec, StandardCollection };
+/** `buildRequirementManifest` + `serializeManifest`. */
+export function manifestJson(manifest: AppManifest): string {
+  return serializeManifest(buildRequirementManifest(manifest));
+}

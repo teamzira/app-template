@@ -7,27 +7,26 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import manifest from '../teambridge.manifest';
-import { manifestJson } from '../lib/teambridge/manifest';
+import { buildRequirementManifest, serializeManifest, type RequirementManifest } from '../lib/teambridge/manifest';
 
 const OUTPUT = resolve(__dirname, '..', 'teambridge.manifest.json');
-const check = process.argv.includes('--check');
 
-let json: string;
+let built: RequirementManifest;
 try {
-  json = manifestJson(manifest);
+  built = buildRequirementManifest(manifest);
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 }
+const json = serializeManifest(built);
 
-let current: string | null = null;
-try {
-  current = readFileSync(OUTPUT, 'utf8');
-} catch {
-  // No file yet.
-}
-
-if (check) {
+if (process.argv.includes('--check')) {
+  let current: string | null = null;
+  try {
+    current = readFileSync(OUTPUT, 'utf8');
+  } catch {
+    // No file yet — that's stale too.
+  }
   if (current !== json) {
     console.error(
       'teambridge.manifest.json is out of date with teambridge.manifest.ts. Run `yarn manifest` and commit the result.'
@@ -37,6 +36,5 @@ if (check) {
   console.log('teambridge.manifest.json is up to date.');
 } else {
   writeFileSync(OUTPUT, json);
-  const { requirements } = JSON.parse(json) as { requirements: unknown[] };
-  console.log(`Wrote teambridge.manifest.json (${requirements.length} requirements).`);
+  console.log(`Wrote teambridge.manifest.json (${built.requirements.length} requirements).`);
 }

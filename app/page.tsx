@@ -94,19 +94,14 @@ export default async function Home({
           usersId ? client.collections.records.list(usersId, { page: 0, pageSize: 50 }) : null,
         ]);
         totalShiftCount = response.totalCount;
-        allShifts = response.data.map((record) => {
-          const rawPublished = published ? record[published.id] : undefined;
-          return {
-            id: record.id,
-            userId: assignee ? (readIds(record[assignee.id])[0] ?? null) : null,
-            startAt: record[start.id] ? String(record[start.id]) : undefined,
-            endAt: record[end.id] ? String(record[end.id]) : undefined,
-            published:
-              typeof rawPublished === 'boolean'
-                ? rawPublished
-                : typeof rawPublished === 'string' && /published|active|live|yes|true/i.test(rawPublished),
-          };
-        });
+        allShifts = response.data.map((record) => ({
+          id: record.id,
+          userId: assignee ? (readIds(record[assignee.id])[0] ?? null) : null,
+          startAt: record[start.id] ? String(record[start.id]) : undefined,
+          endAt: record[end.id] ? String(record[end.id]) : undefined,
+          // Declared BOOLEAN in the schema, so a field that resolved holds a real boolean.
+          published: published ? record[published.id] === true : false,
+        }));
 
         // Reference fields hold record ids, not names. Build an id → name map
         // from the Users collection.
