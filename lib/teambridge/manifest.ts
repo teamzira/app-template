@@ -307,5 +307,5 @@ export function manifestJson(manifest: AppManifest): string {
   return `${JSON.stringify(buildRequirementManifest(manifest), null, 2)}\n`;
 }
 
-// Re-exported so `app/manifest.ts` needs a single import.
+// Re-exported so `teambridge.manifest.ts` needs a single import.
 export type { FieldSpec, CollectionSpec, SchemaSpec, StandardCollection };

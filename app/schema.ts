@@ -2,7 +2,7 @@
  * EXAMPLE CODE — replace with the collections and fields your app uses.
  *
  * One place that names everything the app reads or writes. The same spec is
- * the app's install manifest (`app/manifest.ts`), so each entry also says what
+ * the app's install manifest (`teambridge.manifest.ts`), so each entry also says what
  * an admin installing the app needs to know: what it's for, other names it
  * goes by, and whether it can be created. See AGENTS.md → "Field mapping" and
  * "Install manifest".

@@ -15,7 +15,7 @@ import type { Collection, Field } from './client/types';
  * account's objects (see `lib/teambridge/manifest.ts`).
  *
  * The same spec is the app's install manifest: `defineAppManifest` in
- * `app/manifest.ts` wraps it, and `yarn manifest` turns it into the
+ * `teambridge.manifest.ts` wraps it, and `yarn manifest` turns it into the
  * requirements Teambridge checks before installing the app. The fields below
  * marked "install" only affect that.
  *

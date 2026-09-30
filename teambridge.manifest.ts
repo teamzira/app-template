@@ -7,7 +7,7 @@
  * "Install manifest".
  */
 import { defineAppManifest } from '@/lib/teambridge/manifest';
-import { schema } from './schema';
+import { schema } from './app/schema';
 
 export default defineAppManifest({
   slug: 'shifts-dashboard',

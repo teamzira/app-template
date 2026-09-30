@@ -29,7 +29,7 @@ For changes in those areas, say plainly that they need checking in the embedded 
 ### Before you finish
 
 - `yarn typecheck` and `yarn lint` pass. The lint rule against bare `fetch` is intentional; use `tbFetch`.
-- If you changed `app/schema.ts` or `app/manifest.ts`, run `yarn manifest` and include `teambridge.manifest.json` in the change. Never rename a spec key to tidy it up — keys are what installed accounts are mapped by.
+- If you changed `app/schema.ts` or `teambridge.manifest.ts`, run `yarn manifest` and include `teambridge.manifest.json` in the change. Never rename a spec key to tidy it up — keys are what installed accounts are mapped by.
 - No new hex colors, raw `<button>`/`<input>`, or `min-h-screen` (see AGENTS.md → "Common mistakes").
 - New pages handle loading, error and empty states, and a setup notice when the schema isn't ready.
 - Error copy never says the app can't connect to Teambridge.

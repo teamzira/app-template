@@ -1,12 +1,12 @@
 /**
- * Writes `teambridge.manifest.json` from `app/manifest.ts`.
+ * Writes `teambridge.manifest.json` from `teambridge.manifest.ts`.
  *
  *   yarn manifest          regenerate the file
  *   yarn manifest:check    exit 1 if the file is out of date (runs before `yarn build`)
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import manifest from '../app/manifest';
+import manifest from '../teambridge.manifest';
 import { manifestJson } from '../lib/teambridge/manifest';
 
 const OUTPUT = resolve(__dirname, '..', 'teambridge.manifest.json');
@@ -30,7 +30,7 @@ try {
 if (check) {
   if (current !== json) {
     console.error(
-      'teambridge.manifest.json is out of date with app/manifest.ts. Run `yarn manifest` and commit the result.'
+      'teambridge.manifest.json is out of date with teambridge.manifest.ts. Run `yarn manifest` and commit the result.'
     );
     process.exit(1);
   }
