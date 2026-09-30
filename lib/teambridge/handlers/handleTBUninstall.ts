@@ -1,34 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { hasValidSignature } from './signature';
 import type {
   TBHandlerConfig,
   TBUninstallPayload,
   TBUninstallContext,
 } from '../types';
-
-/**
- * Validates the webhook signature from Teambridge
- */
-function validateWebhookSignature(
-  webhookSecret: string,
-  timestamp: string,
-  body: string,
-  signature: string
-): boolean {
-  const message = `${timestamp}.${body}`;
-  const expectedSignature = createHmac('sha256', webhookSecret)
-    .update(message)
-    .digest('hex');
-
-  try {
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Creates a handler for the Teambridge uninstall webhook.
@@ -76,12 +52,7 @@ export function handleTBUninstall(
 
       // Validate signature
       if (
-        !validateWebhookSignature(
-          config.webhookSecret,
-          timestamp,
-          bodyText,
-          signature
-        )
+        !hasValidSignature(config.webhookSecret, `${timestamp}.${bodyText}`, signature)
       ) {
         return NextResponse.json(
           { success: false, error: 'Invalid signature' },

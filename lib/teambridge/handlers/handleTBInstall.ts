@@ -1,34 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { hasValidSignature } from './signature';
+import { manifestHash } from './handleTBManifest';
 import type {
-  TBHandlerConfig,
+  TBInstallHandlerConfig,
   TBInstallPayload,
   TBInstallContext,
 } from '../types';
-
-/**
- * Validates the webhook signature from Teambridge
- */
-function validateWebhookSignature(
-  webhookSecret: string,
-  timestamp: string,
-  body: string,
-  signature: string
-): boolean {
-  const message = `${timestamp}.${body}`;
-  const expectedSignature = createHmac('sha256', webhookSecret)
-    .update(message)
-    .digest('hex');
-
-  try {
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Creates a handler for the Teambridge install webhook.
@@ -56,11 +33,14 @@ function validateWebhookSignature(
  * ```
  */
 export function handleTBInstall(
-  config: TBHandlerConfig,
+  config: TBInstallHandlerConfig,
   callback: (
     context: TBInstallContext
   ) => Promise<{ success: boolean; error?: string }>
 ) {
+  // Hashed once, on the first install that needs it.
+  let currentManifestHash: string | undefined;
+
   return async function handler(request: Request) {
     try {
       const timestamp = request.headers.get('x-tb-timestamp');
@@ -77,12 +57,7 @@ export function handleTBInstall(
 
       // Validate signature
       if (
-        !validateWebhookSignature(
-          config.webhookSecret,
-          timestamp,
-          bodyText,
-          signature
-        )
+        !hasValidSignature(config.webhookSecret, `${timestamp}.${bodyText}`, signature)
       ) {
         return NextResponse.json(
           { success: false, error: 'Invalid signature' },
@@ -105,6 +80,11 @@ export function handleTBInstall(
         accountId: payload.accountId,
         apiToken: payload.apiToken,
         apiBaseUrl: payload.apiBaseUrl,
+        manifestVersion: payload.manifestVersion,
+        manifestOutdated:
+          config.manifest && payload.manifestVersion
+            ? payload.manifestVersion !== (currentManifestHash ??= manifestHash(config.manifest))
+            : undefined,
       });
 
       return NextResponse.json(result, {

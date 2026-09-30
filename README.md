@@ -79,6 +79,8 @@ npx shadcn@latest add <name>
 │       └── teambridge/
 │           ├── install/
 │           │   └── route.ts    # Installation webhook
+│           ├── manifest/
+│           │   └── route.ts    # Install manifest, read by Teambridge
 │           └── uninstall/
 │               └── route.ts    # Uninstallation webhook
 ├── components/
