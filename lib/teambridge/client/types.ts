@@ -76,8 +76,6 @@ export interface ListAllRecordsOptions {
    * needs more than this should be filtered or paged, not scanned.
    */
   maxPages?: number;
-  /** Pages fetched at once. Defaults to 4; the API allows 720 requests/min per client. */
-  concurrency?: number;
 }
 
 /**

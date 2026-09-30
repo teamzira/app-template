@@ -16,6 +16,8 @@ const DEFAULT_BASE_URL = 'https://open-api.teambridge.com';
 const DEFAULT_AUTH_URL = 'https://teambridge.us.auth0.com/oauth/token';
 const DEFAULT_AUDIENCE = 'https://api.teambridge.com/openapi/';
 const MAX_PAGE_SIZE = 50;
+/** Pages `listAll` reads at once — well inside the 720 requests/minute limit. */
+const LIST_ALL_CONCURRENCY = 4;
 
 /**
  * Error thrown for non-2xx Teambridge API responses. Carries the HTTP status
@@ -144,7 +146,7 @@ export class TBClient {
     path: string,
     options?: {
       body?: unknown;
-      params?: Record<string, string | number | undefined>;
+      params?: Record<string, string | number | boolean | undefined>;
     }
   ): Promise<T> {
     const accessToken = await this.getAccessToken();
@@ -181,13 +183,19 @@ export class TBClient {
     return json.data as T;
   }
 
-  private paginationParams(options?: ListRecordsOptions) {
-    const filters: Record<string, string | number | undefined> = {};
-    for (const [key, value] of Object.entries(options?.filters ?? {})) {
-      if (value !== undefined) filters[key] = String(value);
+  /** Unwraps a list endpoint that answers either a bare array or `{ <key>: [...] }`. */
+  private unwrapList<T>(response: T[] | Record<string, unknown>, ...keys: string[]): T[] {
+    if (Array.isArray(response)) return response;
+    for (const key of keys) {
+      const value = response[key];
+      if (Array.isArray(value)) return value as T[];
     }
+    return [];
+  }
+
+  private paginationParams(options?: ListRecordsOptions) {
     return {
-      ...filters,
+      ...options?.filters,
       page: options?.page,
       size: options?.pageSize, // API uses 'size', we accept 'pageSize' for ergonomics
     };
@@ -253,24 +261,19 @@ export class TBClient {
      * List all collections in the account
      */
     list: async (): Promise<Collection[]> => {
-      const response = await this.request<Collection[] | { collections?: Collection[]; items?: Collection[] }>(
-        'GET',
-        '/v1/collections'
-      );
-      if (Array.isArray(response)) return response;
-      return response.collections ?? response.items ?? [];
+      const response = await this.request<Collection[] | Record<string, unknown>>('GET', '/v1/collections');
+      return this.unwrapList(response, 'collections', 'items');
     },
 
     /**
      * Get field definitions for a collection
      */
     getFields: async (collectionId: string): Promise<Field[]> => {
-      const response = await this.request<Field[] | { fields?: Field[]; items?: Field[] }>(
+      const response = await this.request<Field[] | Record<string, unknown>>(
         'GET',
         `/v1/collections/${collectionId}/fields`
       );
-      if (Array.isArray(response)) return response;
-      return response.fields ?? response.items ?? [];
+      return this.unwrapList(response, 'fields', 'items');
     },
 
     /**
@@ -312,29 +315,29 @@ export class TBClient {
         options?: ListAllRecordsOptions
       ): Promise<{ data: DataRecord[]; totalCount: number; truncated: boolean }> => {
         const maxPages = options?.maxPages ?? 20;
-        const concurrency = Math.max(1, options?.concurrency ?? 4);
-        const first = await this.collections.records.list(collectionId, {
-          filters: options?.filters,
-          page: 0,
-          pageSize: MAX_PAGE_SIZE,
-        });
+        const readPage = (page: number) =>
+          this.collections.records.list(collectionId, {
+            filters: options?.filters,
+            page,
+            pageSize: MAX_PAGE_SIZE,
+          });
+
+        const first = await readPage(0);
         const totalPages = Math.ceil(first.totalCount / MAX_PAGE_SIZE);
         const pagesToRead = Math.min(totalPages, maxPages);
-        const data = [...first.data];
 
-        for (let page = 1; page < pagesToRead; page += concurrency) {
-          const batch = [];
-          for (let p = page; p < Math.min(page + concurrency, pagesToRead); p++) {
-            batch.push(
-              this.collections.records.list(collectionId, {
-                filters: options?.filters,
-                page: p,
-                pageSize: MAX_PAGE_SIZE,
-              })
-            );
+        // A pool of LIST_ALL_CONCURRENCY readers: each takes the next page as
+        // soon as its last one lands, so one slow page doesn't stall a batch.
+        const pages: DataRecord[][] = [first.data];
+        let nextPage = 1;
+        const reader = async () => {
+          while (nextPage < pagesToRead) {
+            const page = nextPage++;
+            pages[page] = (await readPage(page)).data;
           }
-          for (const result of await Promise.all(batch)) data.push(...result.data);
-        }
+        };
+        await Promise.all(Array.from({ length: Math.max(0, Math.min(LIST_ALL_CONCURRENCY, pagesToRead - 1)) }, reader));
+        const data = pages.flat();
 
         const truncated = totalPages > maxPages;
         if (truncated) {
@@ -433,13 +436,11 @@ export class TBClient {
      * absent from records responses. Requires `userContext`.
      */
     getLocations: async (userId: string): Promise<Array<{ id: string; name: string; [key: string]: unknown }>> => {
-      const response = await this.request<Array<{ id: string; name: string }> | { locations?: unknown[] }>(
+      const response = await this.request<Array<{ id: string; name: string }> | Record<string, unknown>>(
         'GET',
         `/v1/users/${userId}/locations`
       );
-      if (Array.isArray(response)) return response;
-      const locations = (response as { locations?: unknown[] }).locations;
-      return Array.isArray(locations) ? (locations as Array<{ id: string; name: string }>) : [];
+      return this.unwrapList(response, 'locations');
     },
   };
 

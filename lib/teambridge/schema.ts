@@ -109,18 +109,20 @@ export function resolveSchema<S extends SchemaSpec>(
     bySpec = new Map();
     schemaCache.set(spec, bySpec);
   }
+  const now = Date.now();
   const cached = bySpec.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.value as Promise<ResolvedSchema<S>>;
+  if (cached && cached.expiresAt > now) return cached.value as Promise<ResolvedSchema<S>>;
+
+  // Drop every expired entry, not just this one, so accounts that stop
+  // calling don't stay in memory for the life of the server.
+  for (const [cachedKey, entry] of bySpec) {
+    if (entry.expiresAt <= now) bySpec.delete(cachedKey);
+  }
 
   const value = resolveUncached(client, spec);
-  bySpec.set(key, { expiresAt: Date.now() + SCHEMA_TTL_MS, value });
+  bySpec.set(key, { expiresAt: now + SCHEMA_TTL_MS, value });
   value.catch(() => bySpec.delete(key));
   return value;
-}
-
-/** Drop a cached resolution, e.g. after an admin has added the missing fields. */
-export function invalidateSchema(spec: SchemaSpec, cacheKey: string) {
-  schemaCache.get(spec)?.delete(cacheKey);
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

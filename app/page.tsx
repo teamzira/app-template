@@ -80,10 +80,19 @@ export default async function Home({
       const { start, end, assignee, published } = shifts.fields;
 
       if (resolved.ready && shifts.id && start && end) {
-        // One page is enough for a demo. For a real view, filter server-side
-        // (e.g. `filters: { [`${start.id}_gte`]: weekStart }`) and page it —
-        // see AGENTS.md → "Filtering" and "Performance".
-        const response = await client.collections.records.list(shifts.id, { page: 0, pageSize: 50 });
+        const users = resolved.collections.users;
+        const { firstName, lastName } = users.fields;
+        const usersId = users.id && (firstName || lastName) ? users.id : null;
+
+        // Both reads only need the schema, so run them together. One page is
+        // enough for a demo; a real view filters server-side (e.g.
+        // `filters: { [`${start.id}_gte`]: weekStart }`) and pages — see
+        // AGENTS.md → "Filtering" and "Performance". The Users page feeds the
+        // assignee picker; a real picker searches server-side as the user types.
+        const [response, usersPage] = await Promise.all([
+          client.collections.records.list(shifts.id, { page: 0, pageSize: 50 }),
+          usersId ? client.collections.records.list(usersId, { page: 0, pageSize: 50 }) : null,
+        ]);
         totalShiftCount = response.totalCount;
         allShifts = response.data.map((record) => {
           const rawPublished = published ? record[published.id] : undefined;
@@ -100,16 +109,12 @@ export default async function Home({
         });
 
         // Reference fields hold record ids, not names. Build an id → name map
-        // from the Users collection. This reads one page for the assignee
-        // picker; a real picker should search server-side as the user types.
-        const users = resolved.collections.users;
-        const { firstName, lastName } = users.fields;
-        if (users.id && (firstName || lastName)) {
+        // from the Users collection.
+        if (usersId && usersPage) {
           const nameOf = (record: Record<string, unknown>) =>
             [firstName && record[firstName.id], lastName && record[lastName.id]].filter(Boolean).join(' ').trim();
 
-          const page = await client.collections.records.list(users.id, { page: 0, pageSize: 50 });
-          for (const record of page.data) {
+          for (const record of usersPage.data) {
             const name = nameOf(record);
             if (!name) continue;
             usersList.push({ id: record.id, name });
@@ -123,7 +128,7 @@ export default async function Home({
             (id): id is string => Boolean(id) && !userNames[id!]
           );
           const records = await Promise.all(
-            missing.map((id) => client.collections.records.get(users.id!, id).catch(() => null))
+            missing.map((id) => client.collections.records.get(usersId, id).catch(() => null))
           );
           for (const record of records) {
             const name = record && nameOf(record);

@@ -2,12 +2,11 @@
 
 import {
   Suspense,
-  forwardRef,
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  type AnchorHTMLAttributes,
+  type ComponentProps,
   type MouseEvent,
 } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -89,6 +88,13 @@ function nextClearToken(): string {
   return `${Date.now().toString(36)}.${clearSequence}`;
 }
 
+/** `params` pointing at `recordId`, without our clear-step nonce. */
+function withRid(params: URLSearchParams, recordId: string): URLSearchParams {
+  params.delete('ridClear');
+  params.set('rid', recordId);
+  return params;
+}
+
 /**
  * Returns `openRecord(recordId)` and `hrefFor(recordId)`. Must render inside a
  * `<Suspense>` boundary (it reads `useSearchParams`); `TBRecordLink` already is.
@@ -109,12 +115,7 @@ export function useOpenRecord() {
   );
 
   const hrefFor = useCallback(
-    (recordId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('ridClear');
-      params.set('rid', recordId);
-      return urlWith(params);
-    },
+    (recordId: string) => urlWith(withRid(new URLSearchParams(searchParams.toString()), recordId)),
     [searchParams, urlWith]
   );
 
@@ -125,17 +126,15 @@ export function useOpenRecord() {
       const current = new URLSearchParams(window.location.search);
 
       if (current.get('rid') === recordId) {
-        const cleared = new URLSearchParams(window.location.search);
-        cleared.delete('rid');
-        cleared.set('ridClear', nextClearToken());
+        current.delete('rid');
+        current.set('ridClear', nextClearToken());
         const seen = commits.current;
-        window.history.replaceState(null, '', urlWith(cleared));
+        window.history.replaceState(null, '', urlWith(current));
         await waitForCommit(commits, seen);
       }
 
-      const next = new URLSearchParams(window.location.search);
-      next.delete('ridClear');
-      next.set('rid', recordId);
+      // Re-read: the host may have navigated us while we waited.
+      const next = withRid(new URLSearchParams(window.location.search), recordId);
       window.history.pushState(null, '', urlWith(next));
     },
     [commits, urlWith]
@@ -144,38 +143,37 @@ export function useOpenRecord() {
   return { openRecord, hrefFor };
 }
 
-type TBRecordLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
+type TBRecordLinkProps = Omit<ComponentProps<'a'>, 'href'> & {
   recordId: string;
 };
 
-const TBRecordLinkInner = forwardRef<HTMLAnchorElement, TBRecordLinkProps>(
-  function TBRecordLinkInner({ recordId, onClick, children, ...props }, ref) {
-    const { openRecord, hrefFor } = useOpenRecord();
-    const href = useMemo(() => hrefFor(recordId), [hrefFor, recordId]);
+function TBRecordLinkInner({ recordId, onClick, children, ...props }: TBRecordLinkProps) {
+  const { openRecord, hrefFor } = useOpenRecord();
+  const href = useMemo(() => hrefFor(recordId), [hrefFor, recordId]);
 
-    const handleClick = useCallback(
-      (event: MouseEvent<HTMLAnchorElement>) => {
-        onClick?.(event);
-        if (event.defaultPrevented) return;
-        // Leave cmd/ctrl/shift-click and middle-click to the browser.
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        event.preventDefault();
-        // A row or card around the link often has its own click handler.
-        event.stopPropagation();
-        void openRecord(recordId);
-      },
-      [onClick, openRecord, recordId]
-    );
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      onClick?.(event);
+      if (event.defaultPrevented) return;
+      // Leave cmd/ctrl/shift-click and middle-click to the browser.
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      // A row or card around the link often has its own click handler.
+      event.stopPropagation();
+      void openRecord(recordId);
+    },
+    [onClick, openRecord, recordId]
+  );
 
-    return (
-      <a ref={ref} href={href} onClick={handleClick} {...props}>
-        {children}
-      </a>
-    );
-  }
-);
+  // `ref` is an ordinary prop in React 19, so it travels in `props`.
+  return (
+    <a href={href} onClick={handleClick} {...props}>
+      {children}
+    </a>
+  );
+}
 
 /**
  * An anchor that opens a record in the Teambridge record detail panel.
@@ -184,15 +182,13 @@ const TBRecordLinkInner = forwardRef<HTMLAnchorElement, TBRecordLinkProps>(
  * @example
  *   <TBRecordLink recordId={shift.id} className="text-primary hover:underline">Open</TBRecordLink>
  */
-export const TBRecordLink = forwardRef<HTMLAnchorElement, TBRecordLinkProps>(
-  function TBRecordLink(props, ref) {
-    return (
-      <Suspense fallback={<span className={props.className}>{props.children}</span>}>
-        <TBRecordLinkInner ref={ref} {...props} />
-      </Suspense>
-    );
-  }
-);
+export function TBRecordLink(props: TBRecordLinkProps) {
+  return (
+    <Suspense fallback={<span className={props.className}>{props.children}</span>}>
+      <TBRecordLinkInner {...props} />
+    </Suspense>
+  );
+}
 
 /**
  * Re-renders the page after a record may have been edited in the host's
