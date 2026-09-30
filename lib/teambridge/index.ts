@@ -21,14 +21,17 @@ export type { TBAccountCredentials } from './middleware';
 // Context
 export { TBProvider, useTBContext, getTBContext } from './context';
 
-// Router (URL sync with parent iframe host)
-export { TBRouter } from './router';
+// Router (URL sync with parent iframe host, host record detail panel)
+export { TBRouter, TBRecordLink, TBRecordEditWatcher, useOpenRecord, isRecordId } from './router';
 
 // Client
-export { TBClient, getTBClient } from './client';
+export { TBClient, TBApiError, getTBClient } from './client';
 export type {
   TBClientConfig,
   PaginationOptions,
+  ListRecordsOptions,
+  ListAllRecordsOptions,
+  RecordFilters,
   PaginatedResponse,
   Collection,
   Field,

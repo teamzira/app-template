@@ -17,8 +17,8 @@ import {
   InboxIcon,
   UserIcon,
 } from 'lucide-react';
-import { getTBContext, TBClient, getCredentialsForAccount } from '@/lib/teambridge';
-import type { Field } from '@/lib/teambridge/client/types';
+import { getTBContext, getTBClient, getCredentialsForAccount, TBRecordLink } from '@/lib/teambridge';
+import { readIds, resolveSchema, type SchemaIssue } from '@/lib/teambridge/schema';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -39,73 +39,17 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { CreateShiftModal } from './create-shift-modal';
+import { schema } from './schema';
 
 type FilterStatus = 'all' | 'published' | 'draft';
 
-type ShiftFieldMapping = {
+type MappedShift = {
+  id: string;
+  userId: string | null;
   startAt?: string;
   endAt?: string;
-  userId?: string;
-  published?: string;
+  published: boolean;
 };
-
-const SHIFT_FIELD_NAMES = {
-  startAt: 'Start Time',
-  endAt: 'End Time',
-  userId: 'Assignee',
-  published: 'Published',
-} as const;
-
-type UserFieldMapping = {
-  firstName?: string;
-  lastName?: string;
-};
-
-function buildUserFieldMapping(fields: Field[]): UserFieldMapping {
-  const mapping: UserFieldMapping = {};
-  for (const f of fields) {
-    if (f.name === 'First Name') mapping.firstName = f.id;
-    else if (f.name === 'Last Name') mapping.lastName = f.id;
-  }
-  return mapping;
-}
-
-function extractUserName(record: Record<string, unknown>, mapping: UserFieldMapping): string {
-  const first = (mapping.firstName ? record[mapping.firstName] : undefined) as string | undefined;
-  const last = (mapping.lastName ? record[mapping.lastName] : undefined) as string | undefined;
-  return [first, last].filter(Boolean).join(' ').trim();
-}
-
-function buildShiftFieldMapping(fields: Field[]): ShiftFieldMapping {
-  const mapping: ShiftFieldMapping = {};
-  for (const f of fields) {
-    if (f.name === SHIFT_FIELD_NAMES.startAt) mapping.startAt = f.id;
-    else if (f.name === SHIFT_FIELD_NAMES.endAt) mapping.endAt = f.id;
-    else if (f.name === SHIFT_FIELD_NAMES.userId) mapping.userId = f.id;
-    else if (f.name === SHIFT_FIELD_NAMES.published) mapping.published = f.id;
-  }
-  return mapping;
-}
-
-function mapRecordToShift(
-  record: Record<string, unknown> & { id: string },
-  mapping: ShiftFieldMapping,
-): { id: string; userId: string | null; startAt?: string; endAt?: string; published: boolean } {
-  const rawPublished = mapping.published ? record[mapping.published] : undefined;
-  let published = false;
-  if (typeof rawPublished === 'boolean') {
-    published = rawPublished;
-  } else if (typeof rawPublished === 'string') {
-    published = /published|active|live|yes|true/i.test(rawPublished);
-  }
-  return {
-    id: record.id,
-    userId: ((mapping.userId ? record[mapping.userId] : undefined) as string | null | undefined) ?? null,
-    startAt: mapping.startAt ? String(record[mapping.startAt] ?? '') : undefined,
-    endAt: mapping.endAt ? String(record[mapping.endAt] ?? '') : undefined,
-    published,
-  };
-}
 
 export default async function Home({
   searchParams,
@@ -116,67 +60,90 @@ export default async function Home({
   const params = await searchParams;
   const currentFilter = (params.status as FilterStatus) || 'all';
 
-  type ShiftsResponse = Awaited<ReturnType<TBClient['collections']['records']['list']>>;
-  let shiftsResponse: ShiftsResponse | null = null;
-  let error: string | null = null;
-
   const credentials = getCredentialsForAccount();
-
+  let error: string | null = null;
+  let setupIssues: SchemaIssue[] = [];
+  let allShifts: MappedShift[] = [];
+  let totalShiftCount = 0;
   const userNames: Record<string, string> = {};
   const usersList: { id: string; name: string }[] = [];
-  let shiftFieldMapping: ShiftFieldMapping = {};
 
   if (credentials) {
     try {
-      const client = new TBClient({
-        clientId: credentials.clientId,
-        clientSecret: credentials.clientSecret,
-        baseUrl: process.env.TB_OPEN_API_BASE_URL!,
-        authUrl: process.env.TB_AUTH_URL!,
-        audience: process.env.TB_AUDIENCE!,
-        userContext,
-      });
+      // Schema discovery is account structure, so it uses the app's own
+      // client and is cached per account. Records are read as the current
+      // user (`userContext`), so Teambridge applies their permissions.
+      const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+      setupIssues = resolved.issues.filter((issue) => issue.blocking);
+      const client = getTBClient(userContext);
+      const shifts = resolved.collections.shifts;
+      const { start, end, assignee, published } = shifts.fields;
 
-      const collections = await client.collections.list();
-      const shiftsCollection = collections.find((c) => c.name.toLowerCase() === 'shifts');
-      if (!shiftsCollection) {
-        throw new Error(
-          'No custom Shifts collection found. Create a custom collection (not the built-in shifts) in Teambridge to use with this app.',
-        );
-      }
+      if (resolved.ready && shifts.id && start && end) {
+        const users = resolved.collections.users;
+        const { firstName, lastName } = users.fields;
+        const usersId = users.id && (firstName || lastName) ? users.id : null;
 
-      const [fieldsResponse, recordsResponse] = await Promise.all([
-        client.collections.getFields(shiftsCollection.id),
-        client.collections.records.list(shiftsCollection.id, { page: 0, pageSize: 50 }),
-      ]);
-      shiftFieldMapping = buildShiftFieldMapping(fieldsResponse);
-      shiftsResponse = recordsResponse;
+        // Both reads only need the schema, so run them together. One page is
+        // enough for a demo; a real view filters server-side (e.g.
+        // `filters: { [`${start.id}_gte`]: weekStart }`) and pages — see
+        // AGENTS.md → "Filtering" and "Performance". The Users page feeds the
+        // assignee picker; a real picker searches server-side as the user types.
+        const [response, usersPage] = await Promise.all([
+          client.collections.records.list(shifts.id, { page: 0, pageSize: 50 }),
+          usersId ? client.collections.records.list(usersId, { page: 0, pageSize: 50 }) : null,
+        ]);
+        totalShiftCount = response.totalCount;
+        allShifts = response.data.map((record) => {
+          const rawPublished = published ? record[published.id] : undefined;
+          return {
+            id: record.id,
+            userId: assignee ? (readIds(record[assignee.id])[0] ?? null) : null,
+            startAt: record[start.id] ? String(record[start.id]) : undefined,
+            endAt: record[end.id] ? String(record[end.id]) : undefined,
+            published:
+              typeof rawPublished === 'boolean'
+                ? rawPublished
+                : typeof rawPublished === 'string' && /published|active|live|yes|true/i.test(rawPublished),
+          };
+        });
 
-      const usersCollection = collections.find((c) => c.name.toLowerCase() === 'users');
-      if (usersCollection) {
-        const userFields = await client.collections.getFields(usersCollection.id);
-        const userFieldMapping = buildUserFieldMapping(userFields);
-        const usersResponse = await client.collections.records.list(usersCollection.id, { page: 0, pageSize: 50 });
-        for (const r of usersResponse.data) {
-          const record = r as Record<string, unknown> & { id: string };
-          const name = extractUserName(record, userFieldMapping);
-          if (name) {
+        // Reference fields hold record ids, not names. Build an id → name map
+        // from the Users collection.
+        if (usersId && usersPage) {
+          const nameOf = (record: Record<string, unknown>) =>
+            [firstName && record[firstName.id], lastName && record[lastName.id]].filter(Boolean).join(' ').trim();
+
+          for (const record of usersPage.data) {
+            const name = nameOf(record);
+            if (!name) continue;
             usersList.push({ id: record.id, name });
             userNames[record.id] = name;
           }
+          usersList.sort((a, b) => a.name.localeCompare(b.name));
+
+          // Assignees outside that page: fetch just those records, never the
+          // whole Users collection.
+          const missing = [...new Set(allShifts.map((shift) => shift.userId))].filter(
+            (id): id is string => Boolean(id) && !userNames[id!]
+          );
+          const records = await Promise.all(
+            missing.map((id) => client.collections.records.get(usersId, id).catch(() => null))
+          );
+          for (const record of records) {
+            const name = record && nameOf(record);
+            if (record && name) userNames[record.id] = name;
+          }
         }
-        usersList.sort((a, b) => a.name.localeCompare(b.name));
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to fetch shifts';
+      // Log the full error; show something specific. This app lives inside
+      // Teambridge, so never tell the user it "can't connect to Teambridge".
+      console.error('[Home] loading shifts', e);
+      error = "Couldn't load shifts. Try again, and if it keeps happening check the app's installation.";
     }
   }
 
-  const rawRecords = shiftsResponse?.data ?? [];
-  type MappedShift = ReturnType<typeof mapRecordToShift>;
-  const allShifts: MappedShift[] = rawRecords.map((r) =>
-    mapRecordToShift(r as Record<string, unknown> & { id: string }, shiftFieldMapping),
-  );
   const publishedShifts = allShifts.filter((s) => s.published);
   const draftShifts = allShifts.filter((s) => !s.published);
   const totalCount = allShifts.length;
@@ -195,7 +162,7 @@ export default async function Home({
   const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   return (
-    <div className="min-h-screen bg-secondary">
+    <div className="bg-background">
       <main className="mx-auto max-w-6xl space-y-6 p-6">
         <h1 className="text-xl font-semibold">
           {greeting}, {firstName}
@@ -250,9 +217,11 @@ export default async function Home({
             ) : error ? (
               <Alert variant="destructive">
                 <AlertCircleIcon />
-                <AlertTitle>Error loading shifts</AlertTitle>
+                <AlertTitle>Couldn&apos;t load shifts</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            ) : setupIssues.length > 0 ? (
+              <SetupNotice issues={setupIssues} />
             ) : filteredShifts.length > 0 ? (
               <Table>
                 <TableHeader>
@@ -283,12 +252,10 @@ export default async function Home({
                         <StatusBadge published={shift.published} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link
-                          href={`/?rid=${encodeURIComponent(shift.id)}`}
-                          className="text-sm text-blue-600 hover:underline"
-                        >
+                        {/* Opens the host's record detail panel — see AGENTS.md → "Record detail". */}
+                        <TBRecordLink recordId={shift.id} className="text-sm text-primary hover:underline">
                           Open
-                        </Link>
+                        </TBRecordLink>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -299,9 +266,9 @@ export default async function Home({
             )}
           </CardContent>
 
-          {shiftsResponse && shiftsResponse.totalCount > 0 && (
+          {totalShiftCount > 0 && (
             <CardFooter className="text-xs text-muted-foreground">
-              Showing {filteredShifts.length} of {shiftsResponse.totalCount} shifts
+              Showing {filteredShifts.length} of {totalShiftCount} shifts
               {currentFilter !== 'all' && ` (filtered by ${currentFilter})`}
             </CardFooter>
           )}
@@ -445,6 +412,26 @@ function StatusBadge({ published }: { published: boolean }) {
     <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Published</Badge>
   ) : (
     <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Draft</Badge>
+  );
+}
+
+/**
+ * Shown when the account is missing collections or fields the app needs.
+ * Name exactly what to add, so an admin can fix it without reading code.
+ */
+function SetupNotice({ issues }: { issues: SchemaIssue[] }) {
+  return (
+    <Alert>
+      <AlertTriangleIcon />
+      <AlertTitle>This app needs a few things set up</AlertTitle>
+      <AlertDescription>
+        <ul className="mt-1 list-disc space-y-1 pl-4">
+          {issues.map((issue) => (
+            <li key={`${issue.collection}/${issue.field ?? ''}`}>{issue.message}</li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }
 

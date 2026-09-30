@@ -1,7 +1,8 @@
 import type {
   TBClientConfig,
   TokenResponse,
-  PaginationOptions,
+  ListRecordsOptions,
+  ListAllRecordsOptions,
   PaginatedResponse,
   Collection,
   Field,
@@ -14,6 +15,66 @@ import type {
 const DEFAULT_BASE_URL = 'https://open-api.teambridge.com';
 const DEFAULT_AUTH_URL = 'https://teambridge.us.auth0.com/oauth/token';
 const DEFAULT_AUDIENCE = 'https://api.teambridge.com/openapi/';
+const MAX_PAGE_SIZE = 50;
+/** Pages `listAll` reads at once — well inside the 720 requests/minute limit. */
+const LIST_ALL_CONCURRENCY = 4;
+
+/**
+ * Error thrown for non-2xx Teambridge API responses. Carries the HTTP status
+ * and the response body so callers can tell a 403 (missing scope or no access)
+ * from a 400 (bad payload) from a 404 — and show a specific message instead of
+ * a generic one. Never swallow these silently; see AGENTS.md → "Errors".
+ */
+export class TBApiError extends Error {
+  readonly status: number;
+  readonly body: string;
+  readonly path: string;
+
+  constructor(status: number, statusText: string, body: string, path: string) {
+    super(`Teambridge API error: ${status} ${statusText} on ${path} - ${body}`);
+    this.name = 'TBApiError';
+    this.status = status;
+    this.body = body;
+    this.path = path;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Access-token cache — module scoped, keyed on auth endpoint + client id +
+// audience. A TBClient is constructed per request (it carries that request's
+// user context), so a per-instance cache would re-run the client-credentials
+// flow on every render. Storing the in-flight promise also collapses
+// concurrent callers into a single token request.
+// ---------------------------------------------------------------------------
+
+interface CachedToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+const tokenCache = new Map<string, Promise<CachedToken>>();
+const TOKEN_EXPIRY_BUFFER_MS = 60_000;
+
+async function fetchToken(authUrl: string, body: Record<string, string>): Promise<CachedToken> {
+  const response = await fetch(authUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to obtain access token: ${response.status} ${response.statusText} - ${errorText}`
+    );
+  }
+
+  const tokenResponse: TokenResponse = await response.json();
+  return {
+    accessToken: tokenResponse.access_token,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
+  };
+}
 
 /**
  * Teambridge API client for making authenticated requests to the Teambridge API.
@@ -40,10 +101,6 @@ export class TBClient {
   private readonly audience: string;
   private readonly userContext: string | undefined;
 
-  // Token cache
-  private accessToken: string | null = null;
-  private tokenExpiresAt: number = 0;
-
   constructor(config: TBClientConfig) {
     this.clientId = config.clientId;
     this.clientSecret = config.clientSecret;
@@ -54,42 +111,34 @@ export class TBClient {
   }
 
   /**
-   * Get a valid access token, refreshing if necessary
+   * Get a valid access token from the shared cache, refreshing if necessary.
    */
   private async getAccessToken(): Promise<string> {
-    // Return cached token if still valid (with 60s buffer)
-    if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) {
-      return this.accessToken;
+    const key = `${this.authUrl}|${this.clientId}|${this.audience}`;
+
+    const cached = tokenCache.get(key);
+    if (cached) {
+      try {
+        const token = await cached;
+        if (Date.now() < token.expiresAt - TOKEN_EXPIRY_BUFFER_MS) {
+          return token.accessToken;
+        }
+      } catch {
+        // A failed token request must not poison the cache — fall through and retry.
+      }
+      tokenCache.delete(key);
     }
 
-    // Request new token using client credentials flow
-    const response = await fetch(this.authUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        grant_type: 'client_credentials',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        audience: this.audience,
-      }),
+    const pending = fetchToken(this.authUrl, {
+      grant_type: 'client_credentials',
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      audience: this.audience,
     });
+    tokenCache.set(key, pending);
+    pending.catch(() => tokenCache.delete(key));
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Failed to obtain access token: ${response.status} ${response.statusText} - ${errorText}`
-      );
-    }
-
-    const tokenResponse: TokenResponse = await response.json();
-
-    // Cache the token
-    this.accessToken = tokenResponse.access_token;
-    this.tokenExpiresAt = Date.now() + tokenResponse.expires_in * 1000;
-
-    return this.accessToken;
+    return (await pending).accessToken;
   }
 
   private async request<T>(
@@ -97,7 +146,7 @@ export class TBClient {
     path: string,
     options?: {
       body?: unknown;
-      params?: Record<string, string | number | undefined>;
+      params?: Record<string, string | number | boolean | undefined>;
     }
   ): Promise<T> {
     const accessToken = await this.getAccessToken();
@@ -126,9 +175,7 @@ export class TBClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Teambridge API error: ${response.status} ${response.statusText} - ${errorText}`
-      );
+      throw new TBApiError(response.status, response.statusText, errorText, `${method} ${path}`);
     }
 
     const json = await response.json();
@@ -136,8 +183,19 @@ export class TBClient {
     return json.data as T;
   }
 
-  private paginationParams(options?: PaginationOptions) {
+  /** Unwraps a list endpoint that answers either a bare array or `{ <key>: [...] }`. */
+  private unwrapList<T>(response: T[] | Record<string, unknown>, ...keys: string[]): T[] {
+    if (Array.isArray(response)) return response;
+    for (const key of keys) {
+      const value = response[key];
+      if (Array.isArray(value)) return value as T[];
+    }
+    return [];
+  }
+
+  private paginationParams(options?: ListRecordsOptions) {
     return {
+      ...options?.filters,
       page: options?.page,
       size: options?.pageSize, // API uses 'size', we accept 'pageSize' for ergonomics
     };
@@ -203,24 +261,19 @@ export class TBClient {
      * List all collections in the account
      */
     list: async (): Promise<Collection[]> => {
-      const response = await this.request<Collection[] | { collections?: Collection[]; items?: Collection[] }>(
-        'GET',
-        '/v1/collections'
-      );
-      if (Array.isArray(response)) return response;
-      return response.collections ?? response.items ?? [];
+      const response = await this.request<Collection[] | Record<string, unknown>>('GET', '/v1/collections');
+      return this.unwrapList(response, 'collections', 'items');
     },
 
     /**
      * Get field definitions for a collection
      */
     getFields: async (collectionId: string): Promise<Field[]> => {
-      const response = await this.request<Field[] | { fields?: Field[]; items?: Field[] }>(
+      const response = await this.request<Field[] | Record<string, unknown>>(
         'GET',
         `/v1/collections/${collectionId}/fields`
       );
-      if (Array.isArray(response)) return response;
-      return response.fields ?? response.items ?? [];
+      return this.unwrapList(response, 'fields', 'items');
     },
 
     /**
@@ -232,7 +285,7 @@ export class TBClient {
        */
       list: async (
         collectionId: string,
-        options?: PaginationOptions
+        options?: ListRecordsOptions
       ): Promise<PaginatedResponse<DataRecord>> => {
         const response = await this.request<{
           data?: unknown;
@@ -249,6 +302,54 @@ export class TBClient {
           size: response.size ?? data.length,
           totalCount: response.totalCount ?? data.length,
         };
+      },
+
+      /**
+       * Read every record matching `filters`, 50 per page, a few pages at a
+       * time, up to `maxPages`. Filter server-side — a full scan of a large
+       * collection (Users, Shifts, Locations) takes seconds and burns the
+       * 720 requests/minute rate limit shared by every request this app makes.
+       */
+      listAll: async (
+        collectionId: string,
+        options?: ListAllRecordsOptions
+      ): Promise<{ data: DataRecord[]; totalCount: number; truncated: boolean }> => {
+        const maxPages = options?.maxPages ?? 20;
+        const readPage = (page: number) =>
+          this.collections.records.list(collectionId, {
+            filters: options?.filters,
+            page,
+            pageSize: MAX_PAGE_SIZE,
+          });
+
+        const first = await readPage(0);
+        const totalPages = Math.ceil(first.totalCount / MAX_PAGE_SIZE);
+        const pagesToRead = Math.min(totalPages, maxPages);
+
+        // A pool of LIST_ALL_CONCURRENCY readers: each takes the next page as
+        // soon as its last one lands, so one slow page doesn't stall a batch.
+        const pages: DataRecord[][] = [first.data];
+        let nextPage = 1;
+        const reader = async () => {
+          while (nextPage < pagesToRead) {
+            const page = nextPage++;
+            pages[page] = (await readPage(page)).data;
+          }
+        };
+        await Promise.all(Array.from({ length: Math.max(0, Math.min(LIST_ALL_CONCURRENCY, pagesToRead - 1)) }, reader));
+        const data = pages.flat();
+
+        const truncated = totalPages > maxPages;
+        if (truncated) {
+          console.warn(
+            `[Teambridge] listAll(${collectionId}) stopped at ${maxPages} pages of ${totalPages}; ` +
+              'filter server-side or page the view instead of scanning.'
+          );
+        }
+
+        // Pages can overlap if records are written mid-scan; dedupe by id.
+        const byId = new Map(data.map((record) => [record.id, record]));
+        return { data: [...byId.values()], totalCount: first.totalCount, truncated };
       },
 
       /**
@@ -318,6 +419,32 @@ export class TBClient {
   };
 
   /**
+   * Platform Users API — separate from the Users *collection*.
+   */
+  users = {
+    /**
+     * Get a platform user by ID (e.g. `userId` from `getTBContext()`).
+     * `recordId` on the result is that user's record in the Users collection.
+     */
+    get: (userId: string): Promise<{ recordId: string; email: string; first_name?: string; last_name?: string; [key: string]: unknown }> => {
+      return this.request('GET', `/v1/users/${userId}`);
+    },
+
+    /**
+     * Locations assigned to a user. Prefer this over reading the Users
+     * collection's Locations field: native link fields like that one can be
+     * absent from records responses. Requires `userContext`.
+     */
+    getLocations: async (userId: string): Promise<Array<{ id: string; name: string; [key: string]: unknown }>> => {
+      const response = await this.request<Array<{ id: string; name: string }> | Record<string, unknown>>(
+        'GET',
+        `/v1/users/${userId}/locations`
+      );
+      return this.unwrapList(response, 'locations');
+    },
+  };
+
+  /**
    * Timezones API
    */
   timezones = {
@@ -357,9 +484,7 @@ export class TBClient {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(
-          `Teambridge API error: ${response.status} ${response.statusText} - ${errorText}`
-        );
+        throw new TBApiError(response.status, response.statusText, errorText, 'POST /v1/documents');
       }
 
       return response.json();

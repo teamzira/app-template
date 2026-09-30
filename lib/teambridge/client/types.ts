@@ -32,8 +32,50 @@ export interface TokenResponse {
 export interface PaginationOptions {
   /** Page number (0-indexed) */
   page?: number;
-  /** Number of items per page */
+  /** Number of items per page (max 50 — the API rejects more) */
   pageSize?: number;
+}
+
+/**
+ * Server-side record filters, keyed `{fieldId}_{operator}` → value. Always key
+ * by field **UUID**, never by field name.
+ *
+ * Operators by field type:
+ *   TEXT / EMAIL / PHONE: `_is`, `_contains`
+ *   NUMBER / DATETIME:    `_is`, `_gt`, `_gte`, `_lt`, `_lte`
+ *   BOOLEAN / SELECT:     `_is` (select matches the option *name*, case-insensitive)
+ *   LINK_TO_* :           `_is` (the linked record's ID)
+ *
+ * Up to 10 filters per request, combined with AND (there is no OR, and no sort
+ * parameter). Some fields cannot be filtered at all — COMPUTED fields, native
+ * system selects, and native system fields such as a user's access groups. An
+ * unsupported filter either 400s or is silently ignored, so check the result
+ * the first time you filter on a new field. See AGENTS.md → "Filtering".
+ *
+ * @example { [`${startField.id}_gte`]: '2026-09-01T00:00:00Z', [`${locationField.id}_is`]: locationId }
+ */
+export type RecordFilters = Record<string, string | number | boolean | undefined>;
+
+/**
+ * Options for listing records.
+ */
+export interface ListRecordsOptions extends PaginationOptions {
+  /** Server-side filters — see {@link RecordFilters} */
+  filters?: RecordFilters;
+}
+
+/**
+ * Options for reading every matching record across pages.
+ */
+export interface ListAllRecordsOptions {
+  /** Server-side filters — see {@link RecordFilters}. Filter here, not in JS. */
+  filters?: RecordFilters;
+  /**
+   * Hard stop, in pages of 50. Defaults to 20 (1,000 records). Hitting it logs
+   * a warning and returns what was read, with `truncated: true` — a view that
+   * needs more than this should be filtered or paged, not scanned.
+   */
+  maxPages?: number;
 }
 
 /**
@@ -60,9 +102,23 @@ export interface Collection {
  */
 export interface Field {
   id: string;
+  /** Display name. NOT unique within a collection — see AGENTS.md → "Field mapping". */
   name: string;
+  /** Public field type, e.g. TEXT, NUMBER, DATETIME, SINGLE_SELECT, MULTI_SELECT, LINK_TO_USER */
   type: string;
   required: boolean;
+  /** True for system-managed fields (e.g. a native Status). Writing one fails. */
+  readOnly?: boolean;
+  /**
+   * How to encode a write to this field. `comma_separated_uuids` means a
+   * single string `"id1,id2"` — **not** a JSON array. `single_uuid` means one
+   * UUID string. Use `toWriteValue()` from `@/lib/teambridge/schema`.
+   */
+  writeFormatHint?: string;
+  /** For link fields, the collection the IDs point into */
+  linkedCollectionId?: string;
+  /** Options for select fields */
+  selectOptions?: Array<{ id: string; name: string }>;
 }
 
 /**

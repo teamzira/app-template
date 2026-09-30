@@ -73,6 +73,7 @@ npx shadcn@latest add <name>
 │   ├── page.tsx                # ⚠ Example demo — replace contents when starting a real app
 │   ├── create-shift-modal.tsx  # ⚠ Example — delete or replace
 │   ├── actions.ts              # ⚠ Example — delete or replace
+│   ├── schema.ts               # ⚠ Example — your app's collections and fields
 │   ├── globals.css             # Alloy design tokens + Tailwind theme bridge
 │   └── api/
 │       └── teambridge/
@@ -89,6 +90,8 @@ npx shadcn@latest add <name>
 │   │   ├── middleware.ts       # Request validation (used by proxy.ts)
 │   │   ├── context/            # TBProvider and hooks
 │   │   ├── client/             # API client
+│   │   ├── schema.ts           # Schema resolution + write encoding
+│   │   ├── router/             # URL sync + record detail panel helpers
 │   │   └── handlers/           # Lifecycle handlers
 │   └── utils.ts                # cn() helper
 ├── proxy.ts                    # Next.js proxy (formerly middleware.ts)
@@ -264,10 +267,15 @@ interface TBClientConfig {
 ```ts
 client.collections.list()
 client.collections.getFields(collectionId)
-client.collections.records.list(collectionId, options?)
+client.collections.records.list(collectionId, { page?, pageSize?, filters? })   // pageSize max 50
+client.collections.records.listAll(collectionId, { filters?, maxPages? })      // paged read with a hard cap
 client.collections.records.get(collectionId, recordId)
 client.collections.records.create(collectionId, data)
 client.collections.records.update(collectionId, recordId, data)
+
+// Platform users (separate from the Users collection)
+client.users.get(userId)            // → { recordId, email, … }
+client.users.getLocations(userId)   // needs userContext
 
 // File uploads — separate API
 client.documents.upload(file, options?)
@@ -275,6 +283,31 @@ client.documents.upload(file, options?)
 // Static lookup
 client.timezones.list()
 ```
+
+Non-2xx responses throw `TBApiError` (`status`, `path`, `body`).
+
+### Schema helpers
+
+`@/lib/teambridge/schema` declares the collections and fields an app uses, resolves them once per account (pinned ids first, names as the fallback), reports missing ones, and encodes writes:
+
+```ts
+defineSchema(spec)
+resolveSchema(client, spec, { cacheKey: accountId })  // → { ready, collections, issues }
+toWriteValue(field, value)                            // follows writeFormatHint / DATETIME / readOnly
+readIds(value)                                        // link & select values → string[]
+```
+
+### Record detail
+
+`@/lib/teambridge/router` opens a record in the Teambridge host's record detail panel:
+
+```tsx
+<TBRecordLink recordId={id}>Open</TBRecordLink>
+const { openRecord } = useOpenRecord();
+<TBRecordEditWatcher />   // in the layout: refresh after edits made in the panel
+```
+
+See [`AGENTS.md`](./AGENTS.md) → "Living inside the Teambridge shell" for why these exist.
 
 ### Context Types
 

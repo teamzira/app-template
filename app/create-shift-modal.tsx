@@ -4,6 +4,7 @@
  * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
  */
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircleIcon, Loader2Icon, PlusIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ type UserOption = { id: string; name: string };
 const UNASSIGNED = '__unassigned';
 
 export function CreateShiftModal({ users = [] }: { users?: UserOption[] }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignee, setAssignee] = useState<string>(UNASSIGNED);
@@ -56,14 +58,19 @@ export function CreateShiftModal({ users = [] }: { users?: UserOption[] }) {
     startTransition(async () => {
       const formData = new FormData();
       formData.set('assignee', assignee === UNASSIGNED ? '' : assignee);
-      formData.set('startTime', startTime);
-      formData.set('endTime', endTime);
+      // `datetime-local` values carry no timezone. Convert here, in the
+      // browser, where the user's timezone is known — on the server
+      // `new Date('2026-06-01T09:00')` would be read in the server's zone.
+      formData.set('startTime', startTime ? new Date(startTime).toISOString() : '');
+      formData.set('endTime', endTime ? new Date(endTime).toISOString() : '');
       const result = await createShift(formData);
       if (result.error) {
         setError(result.error);
       } else {
         handleOpenChange(false);
-        window.location.reload();
+        // Re-render the server components in place. A full reload would
+        // re-request the whole app through the Teambridge proxy.
+        router.refresh();
       }
     });
   }

@@ -1,6 +1,6 @@
-import { TBClient } from './TBClient';
+import { TBClient, TBApiError } from './TBClient';
 
-export { TBClient };
+export { TBClient, TBApiError };
 export * from './types';
 
 /**
