@@ -9,9 +9,15 @@ import type { Collection, Field } from './client/types';
  * Names are how you *find* a collection or field the first time; IDs are how
  * you should *keep* it. Admins rename fields ("Location" → "Facility"), and an
  * app that looks everything up by name on every request breaks the moment
- * they do. So each spec can carry the `id` once you know it: a pinned id wins,
- * and the name is only the fallback. Resolve once, copy the ids from the
- * `issues`/`collections` output into the spec, and commit them.
+ * they do. A pinned `id` wins over the name — but ids differ in every account,
+ * so pin them only in an app built for one account. An app installed into
+ * many accounts leaves `id` out; its install maps each spec key to that
+ * account's objects (see `lib/teambridge/manifest.ts`).
+ *
+ * The same spec is the app's install manifest: `defineAppManifest` in
+ * `app/manifest.ts` wraps it, and `yarn manifest` turns it into the
+ * requirements Teambridge checks before installing the app. The fields below
+ * marked "install" only affect that.
  *
  * Missing fields are reported, not thrown: `issues` lists every collection or
  * field that could not be resolved, and `ready` is false only when a
@@ -34,22 +40,64 @@ import type { Collection, Field } from './client/types';
  *   const startField = resolved.collections.shifts.fields.start; // Field | null
  */
 
+/** Built-in Teambridge collections. Matched by kind on install, whatever the account calls them. */
+export type StandardCollection =
+  | 'user'
+  | 'shift'
+  | 'location'
+  | 'role'
+  | 'job'
+  | 'placement'
+  | 'contact'
+  | 'project'
+  | 'document'
+  | 'task'
+  | 'shift_group'
+  | 'timeoff'
+  | 'break'
+  | 'pay_periods';
+
 export interface FieldSpec {
   /** Field name as shown in Teambridge — matched exactly, case-insensitively */
   name: string;
-  /** Pinned field UUID. Takes precedence over `name`. */
+  /** Pinned field UUID. Takes precedence over `name`. Single-account apps only. */
   id?: string;
-  /** Expected public type(s). Used to pick between fields that share a name, and to reject a wrong one. */
+  /**
+   * Expected public type(s), as the Open API reports them (`DATETIME`,
+   * `SINGLE_SELECT`, `LINK_TO_USER`…). Used to pick between fields that share a
+   * name, and to reject a wrong one. The install manifest needs exactly one.
+   */
   type?: string | string[];
   /** When true, the app cannot work without it and `ready` is false if it is missing. */
   required?: boolean;
+  /** Install: one line on what the app uses this for, shown to the admin installing it. */
+  purpose?: string;
+  /** Install: other names accounts commonly give this field ("Payroll ID" for "Employee ID"). */
+  synonyms?: string[];
+  /** Install: offer to create the field when the account has nothing that fits. */
+  createIfMissing?: boolean;
+  /** Install: whether the app writes this field (the match must then be writable). Defaults to 'read'. */
+  access?: 'read' | 'write';
+  /** Install, select fields: the options the app relies on, by name. */
+  options?: string[];
+  /** Install, link fields: holds several records rather than one. Defaults to false. */
+  multiple?: boolean;
+  /** Install, `CUSTOM_FIELD` links: the key of the collection spec it points at. */
+  links?: string;
 }
 
 export interface CollectionSpec {
   name: string;
+  /** Pinned collection UUID. Single-account apps only. */
   id?: string;
   /** Defaults to true — most apps cannot do anything without their collections. */
   required?: boolean;
+  /** Install: set for a built-in collection. Leave out for a custom one, matched by name. */
+  standard?: StandardCollection;
+  /** Install: what the app uses this collection for. */
+  purpose?: string;
+  /** Install: other names accounts commonly give this collection. */
+  synonyms?: string[];
   fields: Record<string, FieldSpec>;
 }
 
