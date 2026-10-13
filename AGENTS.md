@@ -484,6 +484,7 @@ middleware.ts         # Request validation
 - Treating `app/page.tsx` as the starting point of a real app instead of replacing it.
 - Adding `dark:` variants for surface colors that the semantic tokens already handle.
 - Setting `min-h-screen` on root containers (breaks iframe sizing).
+- Dropping `/` from the matcher in `proxy.ts`. Under `basePath` the catch-all no longer matches the app root, and the root renders as an empty page inside Teambridge while every other page works.
 - Building a record detail modal, or opening one with `<Link href="?rid=…">`. Use `TBRecordLink` / `useOpenRecord`.
 - Matching collections or fields by name on every request instead of resolving a schema once and pinning ids.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
