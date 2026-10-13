@@ -6,6 +6,15 @@ export interface TBClientConfig {
   clientId: string;
   /** OAuth2 Client Secret for authentication */
   clientSecret: string;
+  /**
+   * The account this client acts on, sent as `X-Account-Id`. One app client
+   * is granted every account the app is installed on, so each request names
+   * one: the proxy's `X-TB-Account-Id` (via `getTBContext()`), or
+   * `TB_DEV_ACCOUNT_ID` in dev mode. Without it the Open API falls back to the
+   * acting user's account, or to the client's only grant, and answers 400
+   * once the app is installed on a second account.
+   */
+  accountId?: string;
   /** Base URL for Teambridge API (defaults to production) */
   baseUrl?: string;
   /** Auth0 token endpoint (defaults to Teambridge Auth0) */

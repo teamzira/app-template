@@ -17,7 +17,7 @@ import {
   InboxIcon,
   UserIcon,
 } from 'lucide-react';
-import { getTBContext, getTBClient, getCredentialsForAccount, TBRecordLink } from '@/lib/teambridge';
+import { getTBContext, getTBClient, getAppCredentials, TBApiError, TBRecordLink } from '@/lib/teambridge';
 import { readIds, resolveSchema, type SchemaIssue } from '@/lib/teambridge/schema';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -56,11 +56,12 @@ export default async function Home({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const { accountId, user, userContext } = await getTBContext();
+  const ctx = await getTBContext();
+  const { accountId, user } = ctx;
   const params = await searchParams;
   const currentFilter = (params.status as FilterStatus) || 'all';
 
-  const credentials = getCredentialsForAccount();
+  const credentials = getAppCredentials();
   let error: string | null = null;
   let setupIssues: SchemaIssue[] = [];
   let allShifts: MappedShift[] = [];
@@ -71,11 +72,11 @@ export default async function Home({
   if (credentials) {
     try {
       // Schema discovery is account structure, so it uses the app's own
-      // client and is cached per account. Records are read as the current
-      // user (`userContext`), so Teambridge applies their permissions.
-      const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+      // access and is cached per account. Records are read as the current
+      // user (`ctx.userContext`), so Teambridge applies their permissions.
+      const resolved = await resolveSchema(getTBClient({ accountId }), schema);
       setupIssues = resolved.issues.filter((issue) => issue.blocking);
-      const client = getTBClient(userContext);
+      const client = getTBClient(ctx);
       const shifts = resolved.collections.shifts;
       const { start, end, assignee, published } = shifts.fields;
 
@@ -140,7 +141,10 @@ export default async function Home({
       // Log the full error; show something specific. This app lives inside
       // Teambridge, so never tell the user it "can't connect to Teambridge".
       console.error('[Home] loading shifts', e);
-      error = "Couldn't load shifts. Try again, and if it keeps happening check the app's installation.";
+      error =
+        e instanceof TBApiError && e.isNotInstalled
+          ? "This app isn't installed on this account. Install it from the App Library, then reload."
+          : "Couldn't load shifts. Try again, and if it keeps happening check the app's installation.";
     }
   }
 
@@ -206,12 +210,11 @@ export default async function Home({
                 <AlertTriangleIcon />
                 <AlertTitle>Configuration required</AlertTitle>
                 <AlertDescription>
-                  No credentials found for account{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{accountId}</code>.
-                  Set <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_ID</code> and{' '}
+                  No app credentials found. Set{' '}
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_ID</code> and{' '}
                   <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_SECRET</code> in your{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.local</code>, or add
-                  account-specific credentials.
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.local</code>. One set
+                  serves every account the app is installed on.
                 </AlertDescription>
               </Alert>
             ) : error ? (

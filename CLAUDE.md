@@ -16,7 +16,7 @@ If a fix doesn't work, go back to step 1 instead of stacking another change on t
 
 ### Know what dev mode can and can't prove
 
-`TB_DEV_MODE=true` runs the app standalone at `localhost:3000`, with no Teambridge host around it. Locally you can verify rendering, data reads and writes (with real credentials), types, and lint. You **can't** verify anything that needs the host: the record detail panel opening and reopening (`?rid=`), URL sync with the parent, the `/apps/<slug>` base path, the proxy's 30 s timeout and buffering, or the real user's `X-User-Context` permissions.
+`TB_DEV_MODE=true` runs the app standalone at `localhost:3000`, with no Teambridge host around it. Every API call acts on `TB_DEV_ACCOUNT_ID`, which must have the app installed; a 403 on every call means it doesn't. Locally you can verify rendering, data reads and writes (with real credentials), types, and lint. You **can't** verify anything that needs the host: the record detail panel opening and reopening (`?rid=`), URL sync with the parent, the `/apps/<slug>` base path, the proxy's 30 s timeout and buffering, or the real user's `X-User-Context` permissions.
 
 For changes in those areas, say plainly that they need checking in the embedded app, and give the test steps (for record detail: the checklist in AGENTS.md → "Record detail"). Don't report them as verified.
 

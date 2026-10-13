@@ -30,7 +30,7 @@ import type { Collection, Field } from './client/types';
  *   });
  *
  *   const { accountId } = await getTBContext();
- *   const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+ *   const resolved = await resolveSchema(getTBClient({ accountId }), schema);
  *   const startField = resolved.collections.shifts.fields.start; // Field | null
  */
 
@@ -89,21 +89,24 @@ type CacheEntry = { expiresAt: number; value: Promise<unknown> };
 const schemaCache = new WeakMap<SchemaSpec, Map<string, CacheEntry>>();
 
 /**
- * Resolve a schema spec against the account. Cached per `cacheKey` for five
- * minutes, and concurrent callers share one in-flight resolution — so several
- * components on one page asking at once cost one `collections.list` and one
- * `getFields` per collection, not one each.
+ * Resolve a schema spec against the client's account. Cached per account for
+ * five minutes, and concurrent callers share one in-flight resolution — so
+ * several components on one page asking at once cost one `collections.list`
+ * and one `getFields` per collection, not one each.
  *
- * `cacheKey` should be the `accountId`. Never key on `userContext`: it is
- * re-signed on every request, so every key would be unique and nothing would
- * ever be cached.
+ * The cache key is the client's `accountId`, which `getTBClient()` always
+ * sets. Resolve with the app's own access, `getTBClient({ accountId })`: the
+ * schema is account structure, not user data, so the user context would not
+ * change the answer and must never be the key (it is re-signed on every
+ * request, so nothing would ever be cached).
  */
-export function resolveSchema<S extends SchemaSpec>(
-  client: TBClient,
-  spec: S,
-  options: { cacheKey: string }
-): Promise<ResolvedSchema<S>> {
-  const key = options.cacheKey;
+export function resolveSchema<S extends SchemaSpec>(client: TBClient, spec: S): Promise<ResolvedSchema<S>> {
+  const key = client.accountId;
+  if (!key) {
+    throw new Error(
+      'resolveSchema needs a client that names its account. Build it with getTBClient({ accountId }).'
+    );
+  }
   let bySpec = schemaCache.get(spec);
   if (!bySpec) {
     bySpec = new Map();

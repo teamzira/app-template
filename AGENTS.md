@@ -62,6 +62,7 @@ The app is not a standalone site. It runs in an iframe inside the Teambridge web
 | The browser address bar (it mirrors the app's path and query) | Its app-local routes (`/`, `/reports/123?tab=open`) |
 | **The record detail panel** for any Teambridge record | Deciding *when* to open one (`?rid=`) |
 | Who the user is, and the signed `X-User-Context` | Passing that context to every user-scoped API call |
+| Installing the app on accounts, which grants the app's client each one | Naming the account (`X-Account-Id`) on every API call, via `getTBClient()` |
 
 ### URL sync and deep links
 
@@ -132,6 +133,7 @@ The app lives inside Teambridge, so an error must never say the app "can't conne
 
 - ✓ "Couldn't load shifts. Try again, and if it keeps happening check the app's installation."
 - ✓ "You don't have permission to edit this location."
+- ✓ "This app isn't installed on this account." (`TBApiError.isNotInstalled`, see "Errors")
 - ✓ "This app needs a "Start Time" field on Shifts." (a setup notice, not an error)
 - ✗ "Cannot connect to Teambridge account" / "Teambridge API error: 500 …"
 
@@ -244,25 +246,48 @@ See "Living inside the Teambridge shell → Layout and in-app navigation" above.
 
 All app data — shifts, users, jobs, placements, anything — lives in **collections** (custom data tables). Every read and write goes through the Unified Collections API: `client.collections.list()`, `client.collections.getFields(id)`, `client.collections.records.{list,get,create,update}`. The full canonical workflow with examples lives in README → "Using the API Client". The notes below cover gotchas that have tripped up agents in practice.
 
+### One deployment, many accounts
+
+An app is registered once and installed on any number of accounts. One set of OAuth2 credentials (`TB_CLIENT_ID` / `TB_CLIENT_SECRET`) serves all of them: installing the app is what grants its client an account, and uninstalling revokes it. So every API call has to say which account it acts on. The template does that for you as long as clients come from `getTBClient()`:
+
+```ts
+const ctx = await getTBContext();                      // accountId from the proxy's X-TB-Account-Id
+const client = getTBClient(ctx);                       // as the current user: X-Account-Id + X-User-Context
+const resolved = await resolveSchema(getTBClient({ accountId: ctx.accountId }), schema); // app's own access
+```
+
+- `X-Account-Id` is what scopes the call; `X-User-Context` is what applies the user's permissions. Send both for user-scoped work, and only the account for schema resolution and background work.
+- A call without the account header still works while the app is installed on exactly one account, then fails with 400 ("name one with the X-Account-Id header") on the second install. That error means a client was built without `getTBClient()`.
+- The rate limit of 720 requests/minute is per app client **per account** when the header is sent.
+- In dev mode the account is `TB_DEV_ACCOUNT_ID`, and the app must be installed on it (Settings → App Library). Otherwise every call is a 403. Use the account id from the server `TB_OPEN_API_BASE_URL` points at: a local database's account id gets a 403 from production, and the other way round.
+
+**How the app learns about its accounts.** Teambridge sends the install webhook (`app/api/teambridge/install/route.ts`) when an admin installs the app, and the uninstall webhook when they remove it. They arrive as direct POSTs to `<base URL>/api/teambridge/install/` and `/uninstall/`, trailing slash included, signed with the app's webhook secret rather than through the proxy. Both are advisory: the grant is already made or revoked whatever the hook returns, so keep them fast and idempotent. An app that keeps nothing per account (reads and writes on request, state in Teambridge collections) can ignore both. An app that keeps per-account state (settings, schema bindings, background jobs) should:
+
+1. Record the account in the install hook, and drop it in the uninstall hook.
+2. Also accept an account the first time the proxy sends a request for it. Apps installed before the hook existed never received one; an admin can resend it from the Dev Portal, but don't depend on that.
+3. Treat `TBApiError.isNotInstalled` (a 403 for the account from the Open API) as uninstalled, and stop background work for it. There is no endpoint that lists the app's accounts.
+
+Include `accountId` in every cache key, alongside the user, filters and page.
+
 ### API constraints
 
 - **Page size limit**: the Teambridge API enforces a max of **50 records per page** (default 20). The template client forwards `pageSize` as the API's `size` query param; it does not clamp the value for you. Never request more than 50 in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < 50` or you've consumed `totalCount`.
 
 ### User-scoped Teambridge clients
 
-For user-scoped reads and writes in Server Components, Server Actions, and app API routes, pass the signed Teambridge user context into the OpenAPI client:
+For user-scoped reads and writes in Server Components, Server Actions, and app API routes, pass the request context into the OpenAPI client:
 
 ```ts
 import { getTBClient, getTBContext } from '@/lib/teambridge';
 
 export async function GET() {
-  const { userContext } = await getTBContext();
-  const client = getTBClient(userContext);
+  const ctx = await getTBContext();
+  const client = getTBClient(ctx);
   // ...
 }
 ```
 
-Do **not** use a module-level singleton or plain `getTBClient()` for user-scoped collection operations. Embedded production requests include a signed `X-User-Context` header. `getTBContext()` reads that header on the server, and `getTBClient(userContext)` forwards it to OpenAPI so Teambridge evaluates collection access as the current embedded user. If you drop that context, the app can work locally but show empty or incorrectly scoped data in production.
+Do **not** use a module-level singleton or `getTBClient({ accountId })` alone for user-scoped collection operations. Embedded production requests include a signed `X-User-Context` header. `getTBContext()` reads that header on the server, and `getTBClient(ctx)` forwards it (with the account) to OpenAPI so Teambridge evaluates collection access as the current embedded user. If you drop that context, the app can work locally but show empty or incorrectly scoped data in production.
 
 Use `getTBContext()` only in Server Components, Server Actions, and app API routes; it depends on `next/headers`. In Client Components, read current account/user metadata through `TBProvider` and `useTBContext()`. Client Components should call your app's API routes with `tbFetch()` rather than instantiating `TBClient` directly.
 
@@ -316,7 +341,7 @@ export const schema = defineSchema({
 
 // in a server component / action / route
 const { accountId } = await getTBContext();
-const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+const resolved = await resolveSchema(getTBClient({ accountId }), schema);
 if (!resolved.ready) { /* render a setup notice from resolved.issues */ }
 const start = resolved.collections.shifts.fields.start; // Field | null
 ```
@@ -324,7 +349,7 @@ const start = resolved.collections.shifts.fields.start; // Field | null
 - **Names find things, ids keep them.** Admins rename fields ("Location" becomes "Facility"), and an app that matches names on every request breaks when they do. After the first run against the real account, copy the resolved ids into the spec. A pinned id wins, and the name stays as the fallback and the readable label. A rename then shows up as a non-blocking `renamed` issue, not an outage.
 - **Names are not unique.** One collection can have two fields with the same name (e.g. a BOOLEAN and a MULTI_SELECT both called "Affiliate Vendor"). Give each spec a `type` so the resolver picks the right one. Otherwise which one you get depends on the order the API returns them in.
 - **Use the exact name.** Look at the real field list rather than guessing: it is "Roles", not "role", and "Location", not "facility". A field that doesn't resolve is always `null`, so every read of it silently yields nothing. The resolver reports it instead.
-- **Resolve with the app client** (`getTBClient()` with no user context) and cache by `accountId`. The schema is account structure, not user data. Never use `userContext` as a cache key: it is re-signed on every request, so nothing would ever hit.
+- **Resolve with the app's own access** (`getTBClient({ accountId })`, no user context). The schema is account structure, not user data. `resolveSchema` caches it per account, keyed by the client's `accountId`; never key anything on `userContext`, which is re-signed on every request, so nothing would ever hit.
 
 ### When a field or collection doesn't exist
 
@@ -413,18 +438,19 @@ Encode every write with `toWriteValue(field, value)` from `@/lib/teambridge/sche
 Every Teambridge read is a network round trip from the app server, and the host adds its own boot time before the iframe even loads. Budget accordingly:
 
 - **The proxy times out at 30 seconds** and returns a 504, which the host shows as a failed load. It also buffers the response, so nothing paints until the whole page is ready. By the time the iframe loads, the host has already spent seconds booting, so the app's own render must stay far from that limit.
-- **Rate limit: 720 requests/minute per app client**, shared by every user and every render. A full scan of a 2,000-user collection is 40+ requests.
+- **Rate limit: 720 requests/minute per app client per account**, shared by every user and every render on that account. A full scan of a 2,000-user collection is 40+ requests.
 - **Never full-scan big collections** (Users, Shifts, Locations) per render, and never inside a per-record loop. Filter server-side, fetch related records by id, or build lookup maps once per request.
 - `listAll(collectionId, { filters, maxPages })` pages 50 at a time, a few pages at once, and stops at `maxPages` (default 20) with a warning. If you hit the cap, the view needs a filter or paging, not a higher cap.
 - **Share work within a request.** Don't construct a separate client and schema lookup in every function. The token cache is module-wide (one token request per client, however many `TBClient`s you create), and `resolveSchema` is cached per account.
-- **Cache keys use `userId`, not `userContext`.** The signed context rotates every request, so keying on it means nothing is ever cached. Include every input that scopes the result: user, filters, page, search.
+- **Cache keys use `accountId` and `userId`, not `userContext`.** The signed context rotates every request, so keying on it means nothing is ever cached. Include every input that scopes the result: account, user, filters, page, search.
 - **Next's Data Cache rejects items over 2 MB.** Cache projected rows (just the fields you render), not raw API records.
 - **Keep payloads small.** Everything passed from a server component to a client component is serialized into the page. Pass the rows on screen, not 90 days of records for a nudge that shows three.
 
 ### Errors
 
 - **Never swallow Teambridge errors.** A `try { … } catch { return [] }` around a read or write turns a 403 or 400 into "no data" or "nothing happened", and that sends debugging down the wrong path. Catch at the edge (the route, action or page), `console.error` the `TBApiError`, and show a specific message (see "Error messages" above).
-- `TBApiError` has `status`, `path` and `body`. The body usually names the bad field or format. Read it before changing code.
+- `TBApiError` has `status`, `path` and `body`, plus `code` and `detail` parsed from the Open API's `{ error: { message, code } }`. The body usually names the bad field or format. Read it before changing code.
+- **A 403 can mean two things.** `TBApiError.isNotInstalled` is the app's own access being refused: the app is not installed on that account, or was uninstalled. Say so ("This app isn't installed on this account") and stop background work for it. Any other 403 is the current user's permissions.
 - When a write "does nothing", first log the exact request body and the response. The usual causes are, in order: wrong encoding (`toWriteValue`), a read-only field, a field that didn't resolve (`undefined` key), and a permission error that was caught and ignored.
 
 ## Project structure
@@ -436,7 +462,7 @@ app/
   schema.ts           # ⚠ Example — your app's collections + fields
   globals.css         # Alloy tokens + Tailwind theme bridge — keep
   api/teambridge/
-    install/route.ts  # Lifecycle webhook
+    install/route.ts  # Lifecycle webhooks (advisory; see "One deployment, many accounts")
     uninstall/route.ts
 components/ui/        # shadcn primitives (own them, edit freely)
 lib/
@@ -464,7 +490,8 @@ middleware.ts         # Request validation
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
 - Catching Teambridge errors and returning empty data.
 - Error copy that says the app can't connect to Teambridge.
-- Using `userContext` in a cache key.
+- Using `userContext` in a cache key, or leaving `accountId` out of one.
+- Building a `TBClient` without its account (`new TBClient` by hand) — it works until the app is installed on a second account. Use `getTBClient()`.
 
 ## When in doubt
 

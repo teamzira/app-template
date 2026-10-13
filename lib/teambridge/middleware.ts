@@ -3,19 +3,19 @@ import type { NextRequest } from 'next/server';
 import type { TBMiddlewareConfig } from './types';
 
 /**
- * Credentials for a specific account
+ * The app's OAuth2 client credentials. One set serves every account the app
+ * is installed on; installing an app is what grants its client the account.
  */
-export interface TBAccountCredentials {
+export interface TBAppCredentials {
   clientId: string;
   clientSecret: string;
 }
-
 
 /**
  * Read the app's OAuth2 client credentials from environment variables.
  * Returns null when either TB_CLIENT_ID or TB_CLIENT_SECRET is missing.
  */
-export function getCredentialsForAccount(): TBAccountCredentials | null {
+export function getAppCredentials(): TBAppCredentials | null {
   const clientId = process.env.TB_CLIENT_ID;
   const clientSecret = process.env.TB_CLIENT_SECRET;
 
