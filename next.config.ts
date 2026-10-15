@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
-const isDevMode =
-  process.env.TB_DEV_MODE === "true" ||
-  (process.env.V0_MODE === "true" &&
-    process.env.VERCEL_ENV !== "production");
+const isDevMode = process.env.TB_DEV_MODE === "true";
 
 const tbServerBaseUrl =
   process.env.TB_SERVER_BASE_URL || "https://api.teambridge.com";
