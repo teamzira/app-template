@@ -20,10 +20,10 @@ export async function createShift(formData: FormData) {
     return { error: 'End time must be after start time.' };
   }
 
-  const { accountId, userContext } = await getTBContext();
+  const ctx = await getTBContext();
 
   try {
-    const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+    const resolved = await resolveSchema(getTBClient({ accountId: ctx.accountId }), schema);
     const shifts = resolved.collections.shifts;
     const { start, end, assignee: assigneeField } = shifts.fields;
     if (!resolved.ready || !shifts.id || !start || !end) {
@@ -31,7 +31,7 @@ export async function createShift(formData: FormData) {
     }
 
     // Write as the current user, so Teambridge applies their permissions.
-    const client = getTBClient(userContext);
+    const client = getTBClient(ctx);
     const recordData: Record<string, unknown> = {
       [start.id]: toWriteValue(start, startTime),
       [end.id]: toWriteValue(end, endTime),
@@ -45,6 +45,9 @@ export async function createShift(formData: FormData) {
   } catch (e) {
     // Log the full error for debugging; show the user something specific.
     console.error('[createShift]', e);
+    if (e instanceof TBApiError && e.isNotInstalled) {
+      return { error: "This app isn't installed on this account." };
+    }
     if (e instanceof TBApiError && e.status === 403) {
       return { error: "You don't have permission to create shifts." };
     }

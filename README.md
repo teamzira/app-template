@@ -109,6 +109,8 @@ The Teambridge API uses **OAuth2 Client Credentials flow** for authentication. T
 2. Caches the token until it expires
 3. Automatically refreshes when needed
 
+One set of credentials serves every account the app is installed on. Installing the app on an account (Settings → App Library) is what grants the app's client access to it, so each request names its account with the `X-Account-Id` header. `getTBClient()` sets that from the request context; see [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
+
 ### Token Endpoint
 
 ```
@@ -155,12 +157,11 @@ Three calls cover almost everything:
 #### Example: list shifts
 
 ```tsx
-import { TBClient } from '@/lib/teambridge';
+import { getTBClient, getTBContext } from '@/lib/teambridge';
 
-const client = new TBClient({
-  clientId: process.env.TB_CLIENT_ID!,
-  clientSecret: process.env.TB_CLIENT_SECRET!,
-});
+// The context carries the account (and the current user) the request is for.
+const ctx = await getTBContext();
+const client = getTBClient(ctx);
 
 // 1. Find the Shifts collection
 const collections = await client.collections.list();
@@ -203,33 +204,27 @@ await client.collections.records.update(shiftsCollection.id, recordId, {
 
 The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, including a cross-reference to the Users collection for the assignee picker. (Reminder: those files are example code — replace before shipping.)
 
-You can also use the convenience function in server-side code, which reads credentials from env vars:
-
-```tsx
-import { getTBClient } from '@/lib/teambridge';
-const client = getTBClient();
-```
+`getTBClient(ctx)` acts as the current user, so Teambridge applies their permissions. `getTBClient({ accountId })` acts with the app's own access, which is what schema resolution and background work use. Constructing `TBClient` by hand is for tests; a client without an `accountId` stops working once the app is installed on a second account.
 
 ### Handling Installation
 
-Edit `app/api/teambridge/install/route.ts`:
+Teambridge calls `app/api/teambridge/install/route.ts` when an admin installs the app on an account, and `uninstall/route.ts` when they remove it. Both are advisory: the app's credentials already cover the account (or no longer do) whatever the hook returns. Use them to record the account if the app keeps per-account state:
 
 ```tsx
 import { handleTBInstall } from '@/lib/teambridge';
 
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
-  async (context) => {
-    // Store credentials for this account
-    await db.appInstallations.create({
-      accountId: context.accountId,
-      // Store any account-specific data
-    });
+  async ({ accountId, accountName }) => {
+    await db.installations.upsert({ accountId, accountName });
 
-    return { success: true };
+    // Optional: open the app at this path right after install.
+    return { success: true, setupPath: '/setup/' };
   }
 );
 ```
+
+Apps installed before the hook existed never received it, so an app with per-account state should also accept an account the first time the proxy sends a request for it. See [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
 
 ## Development Workflow
 
@@ -240,6 +235,8 @@ Dev mode allows you to develop locally without going through the Teambridge prox
 1. Set `TB_DEV_MODE=true` in your `.env.local`
 2. Configure `TB_DEV_ACCOUNT_ID`, `TB_DEV_USER_ID`, etc.
 3. The proxy will use these values instead of validating signatures
+
+Every API call acts on `TB_DEV_ACCOUNT_ID`, so the app must be installed on that account (Settings → App Library). If it isn't, every call fails with a 403. Take the id from the server `TB_OPEN_API_BASE_URL` points at; a local database's account id is not valid against production.
 
 ### Testing with Real Data
 
@@ -256,10 +253,15 @@ Dev mode allows you to develop locally without going through the Teambridge prox
 interface TBClientConfig {
   clientId: string;      // OAuth2 Client ID
   clientSecret: string;  // OAuth2 Client Secret
-  baseUrl?: string;      // API base URL (default: https://api.teambridge.com)
+  accountId?: string;    // Account every request acts on (X-Account-Id); getTBClient() always sets it
+  userContext?: string;  // Signed X-User-Context to act as the current user
+  baseUrl?: string;      // API base URL (default: https://open-api.teambridge.com)
   authUrl?: string;      // Auth0 token endpoint (default: https://teambridge.us.auth0.com/oauth/token)
-  audience?: string;     // OAuth2 audience (default: API base URL)
+  audience?: string;     // OAuth2 audience (default: https://api.teambridge.com/openapi/)
 }
+
+getTBClient(ctx)                    // from getTBContext(): as the current user
+getTBClient({ accountId })          // the app's own access
 ```
 
 ### Client Methods
@@ -284,7 +286,7 @@ client.documents.upload(file, options?)
 client.timezones.list()
 ```
 
-Non-2xx responses throw `TBApiError` (`status`, `path`, `body`).
+Non-2xx responses throw `TBApiError` (`status`, `path`, `body`, plus `code` and `detail` parsed from the body). `error.isNotInstalled` is true when the app has no access to the account: not installed, or uninstalled.
 
 ### Schema helpers
 
@@ -292,7 +294,7 @@ Non-2xx responses throw `TBApiError` (`status`, `path`, `body`).
 
 ```ts
 defineSchema(spec)
-resolveSchema(client, spec, { cacheKey: accountId })  // → { ready, collections, issues }
+resolveSchema(client, spec)                           // → { ready, collections, issues }; cached per client.accountId
 toWriteValue(field, value)                            // follows writeFormatHint / DATETIME / readOnly
 readIds(value)                                        // link & select values → string[]
 ```
@@ -313,13 +315,14 @@ See [`AGENTS.md`](./AGENTS.md) → "Living inside the Teambridge shell" for why 
 
 ```ts
 interface TBContext {
-  accountId: string;
+  accountId: string;     // the account this request is for
   userId: string;
   user: {
     id: string;
     email: string;
     name: string;
   };
+  userContext?: string;  // signed X-User-Context (server only)
 }
 ```
 
@@ -334,7 +337,7 @@ Your app can be deployed to any platform that supports Next.js:
 
 Make sure to:
 
-1. Set all required environment variables (`TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET`)
+1. Set all required environment variables (`TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET`). One deployment and one set of credentials serve every account the app is installed on.
 2. Configure your app's base URL in the Teambridge app registry
 
 ## Learn More

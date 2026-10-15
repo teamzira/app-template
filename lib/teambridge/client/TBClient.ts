@@ -24,11 +24,18 @@ const LIST_ALL_CONCURRENCY = 4;
  * and the response body so callers can tell a 403 (missing scope or no access)
  * from a 400 (bad payload) from a 404 — and show a specific message instead of
  * a generic one. Never swallow these silently; see AGENTS.md → "Errors".
+ *
+ * The Open API answers `{ "error": { "message", "code" } }`; `code` and
+ * `detail` are parsed from that when the body has it.
  */
 export class TBApiError extends Error {
   readonly status: number;
   readonly body: string;
   readonly path: string;
+  /** The Open API's error code (e.g. `FORBIDDEN`, `UNSUPPORTED_FIELD_TYPE`), or null when the body carries none. */
+  readonly code: string | null;
+  /** The Open API's error message, or the raw body when it is not JSON. */
+  readonly detail: string;
 
   constructor(status: number, statusText: string, body: string, path: string) {
     super(`Teambridge API error: ${status} ${statusText} on ${path} - ${body}`);
@@ -36,6 +43,56 @@ export class TBApiError extends Error {
     this.status = status;
     this.body = body;
     this.path = path;
+    const parsed = parseErrorBody(body);
+    this.code = parsed.code;
+    this.detail = parsed.message ?? body;
+  }
+
+  /**
+   * True when the app's client has no access to the account the request
+   * named: the app is not installed on it, or was uninstalled. This is about
+   * the app, not the user, so it is distinct from a user-permission 403. Show
+   * "This app isn't installed on this account", and stop any background work
+   * for the account.
+   */
+  get isNotInstalled(): boolean {
+    if (this.status !== 403) return false;
+    return this.code === NOT_INSTALLED_CODE || NOT_INSTALLED_MESSAGE.test(this.detail);
+  }
+}
+
+/**
+ * The Open API's code for "this client has no grant for that account". The
+ * message check covers servers that still answer with the generic
+ * `FORBIDDEN` code.
+ */
+const NOT_INSTALLED_CODE = 'ACCOUNT_NOT_GRANTED';
+const NOT_INSTALLED_MESSAGE = /invalid client_id or account/i;
+
+/**
+ * Two body shapes: the Open API's `{ error: { message, code } }`, and
+ * Micronaut's default for anything unhandled, where the top-level `message`
+ * is just the status text and the real one sits in `_embedded.errors`.
+ */
+function parseErrorBody(body: string): { code: string | null; message: string | null } {
+  try {
+    const json = JSON.parse(body) as {
+      error?: { code?: unknown; message?: unknown } | null;
+      code?: unknown;
+      message?: unknown;
+      _embedded?: { errors?: Array<{ message?: unknown }> } | null;
+    };
+    const openApi = json?.error && typeof json.error === 'object' ? json.error : null;
+    const embedded = json?._embedded?.errors;
+    const embeddedMessage = Array.isArray(embedded) ? embedded[0]?.message : undefined;
+    const code = openApi?.code ?? json?.code;
+    const message = openApi?.message ?? embeddedMessage ?? json?.message;
+    return {
+      code: typeof code === 'string' ? code : null,
+      message: typeof message === 'string' ? message : null,
+    };
+  } catch {
+    return { code: null, message: null };
   }
 }
 
@@ -81,11 +138,17 @@ async function fetchToken(authUrl: string, body: Record<string, string>): Promis
  *
  * Uses OAuth2 Client Credentials flow to obtain access tokens from Auth0.
  *
+ * One app client is granted every account the app is installed on, so each
+ * request names its account with `X-Account-Id` (`accountId`). Prefer
+ * `getTBClient()` from `./index`, which fills in the credentials and the
+ * account from the request context.
+ *
  * @example
  * ```ts
  * const client = new TBClient({
  *   clientId: process.env.TB_CLIENT_ID!,
  *   clientSecret: process.env.TB_CLIENT_SECRET!,
+ *   accountId,
  * });
  *
  * // List collections and fetch records
@@ -100,6 +163,8 @@ export class TBClient {
   private readonly authUrl: string;
   private readonly audience: string;
   private readonly userContext: string | undefined;
+  /** The account every request acts on (`X-Account-Id`). `resolveSchema` caches by it. */
+  readonly accountId: string | undefined;
 
   constructor(config: TBClientConfig) {
     this.clientId = config.clientId;
@@ -108,6 +173,22 @@ export class TBClient {
     this.authUrl = config.authUrl || DEFAULT_AUTH_URL;
     this.audience = config.audience || DEFAULT_AUDIENCE;
     this.userContext = config.userContext;
+    this.accountId = config.accountId;
+  }
+
+  /**
+   * Bearer token plus the two scoping headers: `X-Account-Id` says which
+   * account the call acts on, `X-User-Context` which user it acts as.
+   */
+  private scopedHeaders(accessToken: string): Record<string, string> {
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
+    if (this.accountId) {
+      headers['X-Account-Id'] = this.accountId;
+    }
+    if (this.userContext) {
+      headers['X-User-Context'] = this.userContext;
+    }
+    return headers;
   }
 
   /**
@@ -160,12 +241,9 @@ export class TBClient {
       });
     }
     const requestHeaders: Record<string, string> = {
-      'Authorization': `Bearer ${accessToken}`,
+      ...this.scopedHeaders(accessToken),
       'Content-Type': 'application/json',
     };
-    if (this.userContext) {
-      requestHeaders['X-User-Context'] = this.userContext;
-    }
 
     const response = await fetch(url.toString(), {
       method,
@@ -476,9 +554,7 @@ export class TBClient {
 
       const response = await fetch(`${this.baseUrl}/v1/documents`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: this.scopedHeaders(accessToken),
         body: formData,
       });
 

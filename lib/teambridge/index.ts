@@ -8,15 +8,17 @@ export type {
   TBUninstallPayload,
   TBHandlerConfig,
   TBInstallContext,
+  TBInstallResult,
   TBUninstallContext,
+  TBUninstallResult,
 } from './types';
 
 // Middleware
 export {
   tbMiddleware,
-  getCredentialsForAccount,
+  getAppCredentials,
 } from './middleware';
-export type { TBAccountCredentials } from './middleware';
+export type { TBAppCredentials } from './middleware';
 
 // Context
 export { TBProvider, useTBContext, getTBContext } from './context';
@@ -28,6 +30,7 @@ export { TBRouter, TBRecordLink, TBRecordEditWatcher, useOpenRecord, isRecordId 
 export { TBClient, TBApiError, getTBClient } from './client';
 export type {
   TBClientConfig,
+  TBClientScope,
   PaginationOptions,
   ListRecordsOptions,
   ListAllRecordsOptions,
