@@ -2,7 +2,7 @@
 
 A starter template for building external apps that integrate with Teambridge.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_DEV_ACCOUNT_ID,TB_WEBHOOK_SECRET,APP_SLUG,V0_MODE&envDefaults=%7B%22TB_CLIENT_ID%22%3A%22Client%20ID%22%2C%22TB_CLIENT_SECRET%22%3A%22Client%20Secret%22%2C%22TB_DEV_ACCOUNT_ID%22%3A%22ID%20of%20account%20to%20use%20during%20development%22%2C%22TB_WEBHOOK_SECRET%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22APP_SLUG%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22V0_MODE%22%3A%22true%22%7D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment)
 
 ## Getting Started
 
@@ -337,8 +337,9 @@ Your app can be deployed to any platform that supports Next.js:
 
 Make sure to:
 
-1. Set all required environment variables (`TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET`). One deployment and one set of credentials serve every account the app is installed on.
-2. Configure your app's base URL in the Teambridge app registry
+1. Register the app in the Teambridge Dev Portal (Settings → Dev Portal). It gives you the client ID, client secret, webhook secret and slug.
+2. Set the four environment variables the deploy button asks for: `TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET` and `APP_SLUG`. None of them can be left for later: the proxy signs every request with the webhook secret, and the slug sets the path the app is served under. One deployment and one set of credentials serve every account the app is installed on. Deployments always build for the Teambridge proxy; the `TB_DEV_*` values are for local development only.
+3. Set the app's origin in the Dev Portal to the deployment URL; the `/apps/<slug>` path is appended for you.
 
 ## Learn More
 
