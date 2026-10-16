@@ -69,18 +69,27 @@ npx shadcn@latest add <name>
 
 ```
 ├── app/
-│   ├── layout.tsx              # Root layout with TBProvider
+│   ├── layout.tsx              # Root layout with TBProvider and the section nav
+│   ├── nav.tsx                 # Section nav: Home, and Settings at the foot
 │   ├── page.tsx                # ⚠ Example demo — replace contents when starting a real app
+│   ├── loading.tsx             # Skeleton shown while the page loads
 │   ├── create-shift-modal.tsx  # ⚠ Example — delete or replace
 │   ├── actions.ts              # ⚠ Example — delete or replace
 │   ├── schema.ts               # ⚠ Example — your app's collections and fields
+│   ├── setup/                  # Setup / Settings page (generic over schema.ts)
+│   │   ├── page.tsx            #   pickers per collection and field
+│   │   ├── setup-form.tsx      #   the form (client component)
+│   │   ├── actions.ts          #   saveSetup: validate, store, redirect
+│   │   └── loading.tsx
 │   ├── globals.css             # Alloy design tokens + Tailwind theme bridge
 │   └── api/
+│       ├── setup/fields/
+│       │   └── route.ts        # Fields of a collection, for the setup form
 │       └── teambridge/
 │           ├── install/
-│           │   └── route.ts    # Installation webhook
+│           │   └── route.ts    # Installation webhook (returns setupPath when needed)
 │           └── uninstall/
-│               └── route.ts    # Uninstallation webhook
+│               └── route.ts    # Uninstallation webhook (drops the account's config)
 ├── components/
 │   └── ui/                     # shadcn primitives, themed to Alloy
 ├── lib/
@@ -90,7 +99,9 @@ npx shadcn@latest add <name>
 │   │   ├── middleware.ts       # Request validation (used by proxy.ts)
 │   │   ├── context/            # TBProvider and hooks
 │   │   ├── client/             # API client
-│   │   ├── schema.ts           # Schema resolution + write encoding
+│   │   ├── schema.ts           # Schema resolution (+ per-account bindings) + write encoding
+│   │   ├── config-store.ts     # Per-account config store (in-memory; swap for a database)
+│   │   ├── setup.ts            # requireSetup() gate + resolveAccountSchema()
 │   │   ├── router/             # URL sync + record detail panel helpers
 │   │   └── handlers/           # Lifecycle handlers
 │   └── utils.ts                # cn() helper
@@ -150,9 +161,11 @@ function MyComponent() {
 
 Three calls cover almost everything:
 
-1. **Find the collection by name.** Look it up with `client.collections.list()` and match on `name` (e.g. `"Shifts"`, `"Users"`, `"Jobs"`).
-2. **Discover field IDs.** Each collection has fields with UUID IDs. Fetch them with `client.collections.getFields(collectionId)` and build a `name → id` map.
+1. **Find the collection.** `client.collections.list()` returns every collection with its UUID.
+2. **Discover field IDs.** Each collection has fields with UUID IDs: `client.collections.getFields(collectionId)`.
 3. **Read or write records using field IDs.** Records are keyed by field ID — not field name — both on read and on write.
+
+Apps don't look things up by name per request. They declare the collections and fields they use in `app/schema.ts`; on first contact with an account the template guesses each one by name and saves the ids, an admin corrects anything on the setup page, and `requireSetup()` hands the code resolved `Field` objects (see "Setup and settings"). The walk-through below is the raw API, for exploring an account.
 
 #### Example: list shifts
 
@@ -206,25 +219,28 @@ The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, in
 
 `getTBClient(ctx)` acts as the current user, so Teambridge applies their permissions. `getTBClient({ accountId })` acts with the app's own access, which is what schema resolution and background work use. Constructing `TBClient` by hand is for tests; a client without an `accountId` stops working once the app is installed on a second account.
 
+### Setup and settings
+
+Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`); the shipped one is in memory, so swap it for a database before shipping. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
+
 ### Handling Installation
 
-Teambridge calls `app/api/teambridge/install/route.ts` when an admin installs the app on an account, and `uninstall/route.ts` when they remove it. Both are advisory: the app's credentials already cover the account (or no longer do) whatever the hook returns. Use them to record the account if the app keeps per-account state:
+Teambridge calls `app/api/teambridge/install/route.ts` when an admin installs the app on an account, and `uninstall/route.ts` when they remove it. Both are advisory: the app's credentials already cover the account (or no longer do) whatever the hook returns. The template's install hook asks Teambridge to open the setup page right after install, but only for accounts that need it:
 
 ```tsx
-import { handleTBInstall } from '@/lib/teambridge';
+import { getTBClient, handleTBInstall, resolveAccountSchema, SETUP_PATH } from '@/lib/teambridge';
+import { schema } from '@/app/schema';
 
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
-  async ({ accountId, accountName }) => {
-    await db.installations.upsert({ accountId, accountName });
-
-    // Optional: open the app at this path right after install.
-    return { success: true, setupPath: '/setup/' };
+  async ({ accountId }) => {
+    const resolved = await resolveAccountSchema(getTBClient({ accountId }), schema);
+    return { success: true, setupPath: resolved.ready ? undefined : SETUP_PATH };
   }
 );
 ```
 
-Apps installed before the hook existed never received it, so an app with per-account state should also accept an account the first time the proxy sends a request for it. See [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
+The uninstall hook deletes the account's config. Apps installed before the hook existed never received it, so nothing may depend on it: the `requireSetup()` gate covers those accounts on their first request. See [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
 
 ## Development Workflow
 
@@ -290,13 +306,24 @@ Non-2xx responses throw `TBApiError` (`status`, `path`, `body`, plus `code` and 
 
 ### Schema helpers
 
-`@/lib/teambridge/schema` declares the collections and fields an app uses, resolves them once per account (pinned ids first, names as the fallback), reports missing ones, and encodes writes:
+`@/lib/teambridge/schema` declares the collections and fields an app uses, resolves them once per account by id (the account's bindings, else ids pinned in the spec), guesses the bindings by name once, reports unresolved slots, and encodes writes:
 
 ```ts
 defineSchema(spec)
-resolveSchema(client, spec)                           // → { ready, collections, issues }; cached per client.accountId
+resolveSchema(client, spec, { bindings? })            // → { ready, collections, issues }; cached per account + bindings
+guessBindings(client, spec, existing?)                // good-faith guess by name for slots not set yet (the one name match)
+invalidateSchema(accountId)                           // after writing the account's config
 toWriteValue(field, value)                            // follows writeFormatHint / DATETIME / readOnly
 readIds(value)                                        // link & select values → string[]
+```
+
+`@/lib/teambridge/setup` and `@/lib/teambridge/config-store` (both also exported from `@/lib/teambridge`):
+
+```ts
+resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact
+requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved
+initializeAccount(client, spec)                       // the first-contact guess + save, on its own
+configStore.get(accountId) / set(accountId, config) / delete(accountId)
 ```
 
 ### Record detail

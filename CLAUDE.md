@@ -18,11 +18,11 @@ If a fix doesn't work, go back to step 1 instead of stacking another change on t
 
 `TB_DEV_MODE=true` runs the app standalone at `localhost:3000`, with no Teambridge host around it. Every API call acts on `TB_DEV_ACCOUNT_ID`, which must have the app installed; a 403 on every call means it doesn't. Locally you can verify rendering, data reads and writes (with real credentials), types, and lint. You **can't** verify anything that needs the host: the record detail panel opening and reopening (`?rid=`), URL sync with the parent, the `/apps/<slug>` base path, the proxy's 30 s timeout and buffering, or the real user's `X-User-Context` permissions.
 
-For changes in those areas, say plainly that they need checking in the embedded app, and give the test steps (for record detail: the checklist in AGENTS.md → "Record detail"). Don't report them as verified.
+For changes in those areas, say plainly that they need checking in the embedded app, and give the test steps (for record detail: the checklist in AGENTS.md → "Record detail"). Don't report them as verified. The setup flow is the exception: `/setup/`, saving, the gate and the lifecycle hooks can all be verified standalone (AGENTS.md → "Per-account configuration" → "Testing the flow"); only Teambridge opening `setupPath` after install needs the host.
 
 ### Ask about the account, don't guess
 
-- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them.
+- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them. Each slot is guessed by name once, at first contact with an account, then bound by id; the setup page shows every slot prefilled with that guess for an admin to confirm. A slot with no `type` offers every field.
 - If the account is missing a field or collection the feature needs, tell the user which ones to add and with what type, and build the feature to degrade (see AGENTS.md → "When a field or collection doesn't exist"). Don't substitute a similarly named field.
 - Ask before assuming anything about business rules: which shifts count, which statuses mean "done", who should see what.
 
@@ -30,5 +30,5 @@ For changes in those areas, say plainly that they need checking in the embedded 
 
 - `yarn typecheck` and `yarn lint` pass. The lint rule against bare `fetch` is intentional; use `tbFetch`.
 - No new hex colors, raw `<button>`/`<input>`, or `min-h-screen` (see AGENTS.md → "Common mistakes").
-- New pages handle loading, error and empty states, and a setup notice when the schema isn't ready.
+- New pages call `requireSetup()` before reading records (outside the `try`, or with `unstable_rethrow` first in the `catch`), handle loading, error and empty states, and show a setup notice for non-blocking schema issues.
 - Error copy never says the app can't connect to Teambridge.
