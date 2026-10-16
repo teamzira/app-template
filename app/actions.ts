@@ -3,8 +3,8 @@
 /**
  * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
  */
-import { getTBContext, getTBClient, TBApiError } from '@/lib/teambridge';
-import { resolveSchema, toWriteValue } from '@/lib/teambridge/schema';
+import { getTBContext, getTBClient, resolveAccountSchema, TBApiError } from '@/lib/teambridge';
+import { toWriteValue } from '@/lib/teambridge/schema';
 import { schema } from './schema';
 
 export async function createShift(formData: FormData) {
@@ -23,7 +23,8 @@ export async function createShift(formData: FormData) {
   const ctx = await getTBContext();
 
   try {
-    const resolved = await resolveSchema(getTBClient({ accountId: ctx.accountId }), schema);
+    // Same resolution as the page: the account's bindings, if any, then names.
+    const resolved = await resolveAccountSchema(getTBClient({ accountId: ctx.accountId }), schema);
     const shifts = resolved.collections.shifts;
     const { start, end, assignee: assigneeField } = shifts.fields;
     if (!resolved.ready || !shifts.id || !start || !end) {

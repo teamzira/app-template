@@ -1,11 +1,14 @@
 /**
  * EXAMPLE CODE — replace with the collections and fields your app uses.
  *
- * One place that names everything the app reads or writes. Once you have run
- * the app against the real account, copy each resolved `id` in here next to
- * its `name`: pinned ids keep working when an admin renames a field, and the
- * name stays as the readable label and the fallback. See AGENTS.md → "Field
- * mapping".
+ * One place that declares every slot the app reads or writes. A slot's
+ * `name` is the label an admin sees on the setup page, `type` is what its
+ * picker offers, and `required` decides whether the app can run without it.
+ * Slots resolve by id: the id bound for the account, or an `id` pinned here
+ * as the default. The name is used once, at first contact with an account,
+ * to guess the binding (the one collection or field with that name and
+ * type); the admin confirms or corrects it in Settings. Pin ids once the app
+ * is built for a known account. See AGENTS.md → "Per-account configuration".
  */
 import { defineSchema } from '@/lib/teambridge/schema';
 
