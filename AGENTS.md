@@ -463,7 +463,7 @@ Accounts differ: the collection this app calls "Shifts" may be "Rota" on one acc
 - `app/schema.ts` declares the app's **slots**: each collection and field it reads or writes, with a `name`, a `type`, and whether it is `required`.
 - On **first contact** with an account (the install hook, or its first request if the hook never came) `resolveAccountSchema` runs `guessBindings`: each slot gets the one collection or field with its name and type, and the result is saved as ids. An account whose collections carry the expected names works without a visit to setup.
 - `/setup/` (`app/setup/`) lets an admin **bind** each slot to a collection and field on their account. Pickers offer only fields of the slot's `type`, and anything not set yet arrives prefilled with the same guess, marked once at the top of the form rather than under every field. Saving validates by resolving the schema with the new bindings, stores them, and opens the app.
-- The **config store** (`lib/teambridge/config-store.ts`) keeps the bindings per account, behind a small interface.
+- The **config store** (`lib/teambridge/config-store.ts`) keeps the bindings per account, behind a small interface: in Postgres when `DATABASE_URL` is set (the Neon integration), in memory otherwise, for development. See "The config store".
 - `requireSetup()` (`lib/teambridge/setup.ts`) is the **gate** every page calls: it resolves the schema with the account's bindings and redirects to `/setup/` while a required slot is unresolved.
 - The **install hook** returns `setupPath: '/setup/'` only when a required slot is still unresolved after the guess, so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config.
 - **Settings** in the section nav (`app/nav.tsx`) reopens `/setup/` prefilled with the current choices, so an admin can rebind later, when a field was renamed or a different collection should be used, without reinstalling.
@@ -536,15 +536,29 @@ export default async function Page() {
 - Don't gate `/setup/` itself, API routes, server actions or the lifecycle hooks. Those use `resolveAccountSchema()` and handle `ready === false` as a result, not a redirect.
 - Nothing restricts who reaches `/setup/` or the save action: no role or permission reaches the app from Teambridge yet, so anyone who can open the app can change its settings. Say so in your app's docs rather than inventing a check. When a signed permission claim arrives, gate the page and `saveSetup` on it in one place.
 
-### Swapping the config store
+### The config store
 
-The shipped store is in memory: fine for development, not for production. It is empty after every restart or deploy, and each server instance has its own copy. Replace it before shipping:
+`configStore` (`lib/teambridge/config-store.ts`) is the one place per-account state is kept. It chooses its backing store from the environment the first time it is used:
 
-1. Implement `ConfigStore` (`get`, `set`, `delete`, all keyed by account id) against your database. Postgres (Neon on the Vercel Marketplace): one table, `account_config(account_id text primary key, config jsonb not null, updated_at timestamptz not null)`, with `set` as an upsert. Redis (Upstash): one key per account, `config:<accountId>`, holding the JSON.
-2. Change the `configStore` export in `lib/teambridge/config-store.ts` to your implementation. Nothing else changes: the setup page, the gate and the hooks all import that export.
-3. Keep `AccountConfig` as the stored shape, and add the app's own settings to it rather than inventing a second store. Keep calling `invalidateSchema(accountId)` after `set`.
+- **Postgres** when `DATABASE_URL` is set. The README's deploy button requires the Neon integration, which sets it (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment of the project, so an app deployed from the button keeps its settings from the first request. The store goes through Neon's serverless driver over HTTP, one request per call, so there is no connection pool to keep alive on Fluid Compute. It creates its one table itself, once per instance, with `CREATE TABLE IF NOT EXISTS`:
 
-Never cache the store's contents without the account id in the key, and never key anything on `userContext`.
+  ```sql
+  account_config(account_id text primary key, config jsonb not null, updated_at timestamptz not null)
+  ```
+
+  `set` is an upsert, `get` is `null` for an account with no row, and `delete` is what the uninstall hook calls.
+- **Memory** otherwise, for standalone development. It is empty after every restart or deploy and each instance has its own copy; on Vercel Fluid Compute an admin's choices in Settings would vanish at the next cold start. So outside `TB_DEV_MODE` the server log carries one warning, and a deployment without `DATABASE_URL` is misconfigured, not degraded.
+
+Locally `DATABASE_URL` is optional: the memory store is enough to develop against, and nothing in the flow behaves differently. To develop against the real store, pull the project's variables into a file of their own (`vercel env pull .env.development.local`; Next loads it beside `.env.local`) or paste a Neon connection string into `.env.local`. Neon's free plan suspends an idle database after five minutes, so the first query after a pause waits a moment while it resumes.
+
+Whatever the store:
+
+- Keep `AccountConfig` as the stored shape, and add the app's own per-account settings to it rather than inventing a second store. Call `invalidateSchema(accountId)` after every `set`.
+- Never cache the store's contents without the account id in the key, and never key anything on `userContext`.
+
+**The app's own tables.** The database is the app's, so its own data goes beside `account_config` in tables of its own, each scoped by account id (one deployment serves every account the app is installed on). The template creates its one table on first use because that table never changes; the app's tables will, so once there are any, manage them with migrations rather than more `CREATE TABLE IF NOT EXISTS`. Drizzle fits this driver: `drizzle-orm/neon-http` over the same `neon()` connection, `drizzle-kit generate` and `migrate` for the migrations, run with the environment loaded, which its CLI doesn't do on its own (`npx dotenv -e .env.local -- npx drizzle-kit migrate`). `account_config` can stay as it is or move into those migrations; the store doesn't mind a table that already exists.
+
+To use a different database, change `chooseConfigStore` in `lib/teambridge/config-store.ts` (a `ConfigStore` is `get`, `set` and `delete`, keyed by account id). The setup page, the gate and the hooks all go through the `configStore` export and don't change.
 
 ### Testing the flow
 
@@ -570,7 +584,7 @@ lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
     schema.ts         # defineSchema / resolveSchema (by id) / guessBindings (by name, once) / invalidateSchema / toWriteValue / readIds
-    config-store.ts   # Per-account config behind ConfigStore (in-memory shipped; swap for a database)
+    config-store.ts   # Per-account config behind ConfigStore (Postgres via Neon when DATABASE_URL is set, else memory)
     setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / SETUP_PATH
     router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher
     fetch.ts, url.ts  # tbFetch / tbPath for the /apps/<slug> base path
@@ -594,7 +608,7 @@ proxy.ts              # Request validation
 - Finding a collection or field by name in app code. The one name match is the first-contact guess (`guessBindings`); everything after it is by id.
 - Writing to the config store without `invalidateSchema(accountId)`, or keeping per-account state in a module-level map (routes don't share module state; use the store).
 - Calling `redirect()` from a Server Action. The proxy drops the redirect header; return a result and navigate in the client (see "Navigation & data fetching").
-- Shipping with the in-memory config store. It is empty after every deploy.
+- Deploying without `DATABASE_URL`. The config store falls back to memory, which is empty after every deploy and cold start, so every admin's choices in Settings are lost; the server log warns about it. Add the Neon integration to the project.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
 - Catching Teambridge errors and returning empty data.

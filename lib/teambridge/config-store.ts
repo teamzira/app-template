@@ -1,3 +1,4 @@
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import type { SchemaBindings } from './schema';
 
 /**
@@ -9,13 +10,18 @@ import type { SchemaBindings } from './schema';
  * Every key is an account id. An app is installed on many accounts and one
  * deployment serves them all, so nothing in here is ever unscoped.
  *
- * The store is behind an interface so the implementation can change without
- * touching callers. The one shipped here is in memory: fine for development,
- * **not for production** — it is empty after every restart or deploy, and
- * each server instance has its own copy, so two instances would disagree. To
- * ship, implement `ConfigStore` against a database (one row per account:
- * `account_id` primary key, `config` JSON) and change the `configStore`
- * export below. See AGENTS.md → "Configuration" for a Postgres/Redis sketch.
+ * Two stores ship behind one interface, and `configStore` picks one from the
+ * environment the first time it is used:
+ *
+ *  - **Postgres** when `DATABASE_URL` is set — which the Neon integration
+ *    does for every deployment made from the README's deploy button. One
+ *    table, one row per account, created on first use.
+ *  - **Memory** otherwise, for standalone development only: it is empty
+ *    after every restart or deploy, and each server instance has its own
+ *    copy. Outside `TB_DEV_MODE` that is a misconfigured deployment, and the
+ *    server log says so once.
+ *
+ * See AGENTS.md → "Per-account configuration" → "The config store".
  */
 export interface AccountConfig {
   /** The account's choice of collections and fields for the spec's slots. */
@@ -33,20 +39,26 @@ export interface ConfigStore {
   delete(accountId: string): Promise<void>;
 }
 
-// The map lives on `globalThis`, not at module level. Next bundles each route
-// on its own, so the setup action, the uninstall hook and the pages would
-// otherwise each hold a separate map and never see one another's writes; and
-// dev-mode hot reloads re-evaluate this module, which would send every tester
-// back to setup after each file save.
+// Shared state lives on `globalThis`, not at module level. Next bundles each
+// route on its own, so the setup action, the uninstall hook and the pages
+// would otherwise each hold a separate copy of this module — a separate map
+// for the memory store, a separate choice of store, a separate "table
+// created" flag — and never see one another's writes; and dev-mode hot
+// reloads re-evaluate this module, which would send every tester back to
+// setup after each file save.
 const MEMORY_STORE_KEY = '__tbMemoryConfigStore';
-type WithMemoryStore = typeof globalThis & { [MEMORY_STORE_KEY]?: Map<string, AccountConfig> };
+const CONFIG_STORE_KEY = '__tbConfigStore';
+type WithStoreGlobals = typeof globalThis & {
+  [MEMORY_STORE_KEY]?: Map<string, AccountConfig>;
+  [CONFIG_STORE_KEY]?: ConfigStore;
+};
 
 /**
  * An in-memory `ConfigStore`. Development only: nothing survives a restart,
  * and instances don't share it.
  */
 export function createMemoryConfigStore(): ConfigStore {
-  const globals = globalThis as WithMemoryStore;
+  const globals = globalThis as WithStoreGlobals;
   const entries = (globals[MEMORY_STORE_KEY] ??= new Map<string, AccountConfig>());
   return {
     async get(accountId) {
@@ -63,8 +75,103 @@ export function createMemoryConfigStore(): ConfigStore {
 }
 
 /**
- * The store the app uses. Swap the implementation here — for example
- * `createPostgresConfigStore(sql)` — and nothing else changes: the setup page,
- * the gate (`./setup`) and the lifecycle hooks all go through this export.
+ * A `ConfigStore` on Postgres, through Neon's serverless driver: each call is
+ * one HTTP request, so there is no connection pool to keep alive or exhaust
+ * on Fluid Compute. One table, created the first time the store is used on
+ * an instance (`CREATE TABLE IF NOT EXISTS`, so every instance and every
+ * deploy can run it):
+ *
+ *   account_config(account_id text primary key, config jsonb not null, updated_at timestamptz not null)
+ *
+ * `set` is an upsert and `get` is null for an account with no row. Nothing
+ * connects until the first call, so building without `DATABASE_URL` is fine.
  */
-export const configStore: ConfigStore = createMemoryConfigStore();
+export function createPostgresConfigStore(connectionString: string): ConfigStore {
+  let sql: NeonQueryFunction<false, false> | undefined;
+  let ready: Promise<void> | undefined;
+
+  const query = () => (sql ??= neon(connectionString));
+
+  // Once per instance, and never a cached failure: if creating the table
+  // fails (the database is unreachable, or two instances created it at the
+  // same moment and one lost the race on the catalog), the next call tries
+  // again instead of failing forever.
+  const table = () => {
+    ready ??= createTable(query()).catch((error: unknown) => {
+      ready = undefined;
+      throw error;
+    });
+    return ready;
+  };
+
+  return {
+    async get(accountId) {
+      await table();
+      const rows = await query()`SELECT config FROM account_config WHERE account_id = ${accountId}`;
+      return rows.length > 0 ? (rows[0].config as AccountConfig) : null;
+    },
+    async set(accountId, config) {
+      await table();
+      await query()`
+        INSERT INTO account_config (account_id, config, updated_at)
+        VALUES (${accountId}, ${JSON.stringify(config)}::jsonb, now())
+        ON CONFLICT (account_id) DO UPDATE SET config = EXCLUDED.config, updated_at = EXCLUDED.updated_at`;
+    },
+    async delete(accountId) {
+      await table();
+      await query()`DELETE FROM account_config WHERE account_id = ${accountId}`;
+    },
+  };
+}
+
+async function createTable(sql: NeonQueryFunction<false, false>): Promise<void> {
+  const create = () => sql`
+    CREATE TABLE IF NOT EXISTS account_config (
+      account_id text PRIMARY KEY,
+      config jsonb NOT NULL,
+      updated_at timestamptz NOT NULL
+    )`;
+  try {
+    await create();
+  } catch {
+    // Two instances running this at the same moment can collide on the
+    // catalog's unique index even with IF NOT EXISTS; the table exists after
+    // either of them, so one more try settles it (and a real failure throws).
+    await create();
+  }
+}
+
+/**
+ * The store for this deployment, chosen once per instance from the
+ * environment: Postgres when `DATABASE_URL` is set, else memory.
+ */
+function chooseConfigStore(): ConfigStore {
+  const connectionString = process.env.DATABASE_URL;
+  if (connectionString) return createPostgresConfigStore(connectionString);
+  if (process.env.TB_DEV_MODE !== 'true') {
+    console.warn(
+      '[Teambridge] DATABASE_URL is not set, so per-account settings are kept in memory and lost on the next restart or deploy. ' +
+        'Add the Neon integration to the Vercel project (`vercel integration add neon`) or set DATABASE_URL.'
+    );
+  }
+  return createMemoryConfigStore();
+}
+
+function selectedStore(): ConfigStore {
+  const globals = globalThis as WithStoreGlobals;
+  return (globals[CONFIG_STORE_KEY] ??= chooseConfigStore());
+}
+
+/**
+ * The store the app uses. The setup page, the gate (`./setup`) and the
+ * lifecycle hooks all go through this export. It decides between Postgres
+ * and memory on its first call (see `chooseConfigStore`), not at import, so
+ * importing it has no side effects and a build without `DATABASE_URL` is
+ * fine. To use a different database, change `chooseConfigStore` and nothing
+ * else.
+ */
+export const configStore: ConfigStore = {
+  get: (accountId) => selectedStore().get(accountId),
+  set: (accountId, config) => selectedStore().set(accountId, config),
+  delete: (accountId) => selectedStore().delete(accountId),
+};

@@ -61,7 +61,7 @@ export { handleTBInstall, handleTBUninstall } from './handlers';
 // Per-account configuration and the setup gate. Also importable from their
 // own sub-paths (`@/lib/teambridge/config-store`, `@/lib/teambridge/setup`);
 // the schema helpers stay at `@/lib/teambridge/schema`.
-export { configStore, createMemoryConfigStore } from './config-store';
+export { configStore, createMemoryConfigStore, createPostgresConfigStore } from './config-store';
 export type { AccountConfig, ConfigStore } from './config-store';
 export { initializeAccount, requireSetup, resolveAccountSchema, SETUP_PATH } from './setup';
 

@@ -32,3 +32,4 @@ For changes in those areas, say plainly that they need checking in the embedded 
 - No new hex colors, raw `<button>`/`<input>`, or `min-h-screen` (see AGENTS.md → "Common mistakes").
 - New pages call `requireSetup()` before reading records (outside the `try`, or with `unstable_rethrow` first in the `catch`), handle loading, error and empty states, and show a setup notice for non-blocking schema issues.
 - Error copy never says the app can't connect to Teambridge.
+- Per-account settings persist in Postgres, not memory. A deployment needs `DATABASE_URL`, which the Neon integration from the deploy button sets; the server log warns when the store fell back to memory. Don't build anything that assumes the memory store, and keep the app's own per-account settings in `AccountConfig` rather than a second store (AGENTS.md → "The config store").

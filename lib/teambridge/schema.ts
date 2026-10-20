@@ -97,6 +97,41 @@ export type SchemaBindings = {
 export interface ResolveSchemaOptions {
   /** The account's saved bindings, if any. See {@link SchemaBindings}. */
   bindings?: SchemaBindings | null;
+  /** Reads of the account already made (`readAccountStructure`), to resolve from instead of reading again. */
+  structure?: AccountStructure;
+}
+
+/**
+ * The reads a resolution makes — the account's collections, and the fields
+ * of each collection it looks at — memoized, so that two steps over the same
+ * account read each list once. First contact is the case: `guessBindings`
+ * reads them to guess, and `resolveSchema` would read them again to resolve
+ * from the guess; `initializeAccount` (`./setup`) hands both the same
+ * structure instead. `guessBindings` and `resolveSchema` make their own when
+ * none is passed.
+ */
+export interface AccountStructure {
+  /** Every collection on the account. */
+  collections(): Promise<Collection[]>;
+  /** The fields of one collection. */
+  fields(collectionId: string): Promise<Field[]>;
+}
+
+/** An `AccountStructure` that reads from `client` on first use and remembers what it read. */
+export function readAccountStructure(client: TBClient): AccountStructure {
+  let collections: Promise<Collection[]> | undefined;
+  const fields = new Map<string, Promise<Field[]>>();
+  return {
+    collections: () => (collections ??= client.collections.list()),
+    fields: (collectionId) => {
+      let list = fields.get(collectionId);
+      if (!list) {
+        list = client.collections.getFields(collectionId);
+        fields.set(collectionId, list);
+      }
+      return list;
+    },
+  };
 }
 
 export type ResolvedSchema<S extends SchemaSpec> = {
@@ -218,7 +253,7 @@ export function resolveSchema<S extends SchemaSpec>(
     entries = new Map();
     cache.set(accountId, entries);
   }
-  const value = resolveUncached(client, spec, bindings);
+  const value = resolveUncached(spec, bindings, options.structure ?? readAccountStructure(client));
   const entry: CacheEntry = { expiresAt: now + SCHEMA_TTL_MS, value };
   entries.set(key, entry);
   value.catch(() => {
@@ -255,12 +290,12 @@ function pinFor(bound: string | null | undefined, specId: string | undefined): P
 }
 
 async function resolveUncached<S extends SchemaSpec>(
-  client: TBClient,
   spec: S,
-  bindings: SchemaBindings | undefined
+  bindings: SchemaBindings | undefined,
+  structure: AccountStructure
 ): Promise<ResolvedSchema<S>> {
   const issues: SchemaIssue[] = [];
-  const allCollections = await client.collections.list();
+  const allCollections = await structure.collections();
 
   const entries = await Promise.all(
     Object.entries(spec).map(async ([key, collectionSpec]) => {
@@ -274,7 +309,7 @@ async function resolveUncached<S extends SchemaSpec>(
         return [key, { id: null, name: collectionSpec.name, fields }] as const;
       }
 
-      const available = await client.collections.getFields(collection.id);
+      const available = await structure.fields(collection.id);
       for (const [fieldKey, fieldSpec] of Object.entries(collectionSpec.fields)) {
         fields[fieldKey] = findField(
           available,
@@ -433,13 +468,17 @@ export function matchFields<C extends CollectionSpec>(
  * without a visit to setup; the setup page runs it to prefill whatever is
  * still unset. Either way what is saved is ids, and from then on resolution
  * never looks at a name again.
+ *
+ * Pass a `structure` to share its reads with the resolution that follows
+ * (see {@link AccountStructure}); without one it reads from `client`.
  */
 export async function guessBindings<S extends SchemaSpec>(
   client: TBClient,
   spec: S,
-  existing?: SchemaBindings | null
+  existing?: SchemaBindings | null,
+  structure: AccountStructure = readAccountStructure(client)
 ): Promise<SchemaBindings> {
-  const all = await client.collections.list();
+  const all = await structure.collections();
   const bindings: SchemaBindings = {};
 
   for (const [key, collectionSpec] of Object.entries(spec)) {
@@ -454,10 +493,7 @@ export async function guessBindings<S extends SchemaSpec>(
     const fields = { ...current?.fields };
     const unset = Object.keys(collectionSpec.fields).filter((fieldKey) => fields[fieldKey] === undefined);
     if (unset.length > 0) {
-      const matched: Record<string, Field | null> = matchFields(
-        await client.collections.getFields(collectionId),
-        collectionSpec
-      );
+      const matched: Record<string, Field | null> = matchFields(await structure.fields(collectionId), collectionSpec);
       for (const fieldKey of unset) {
         const field = matched[fieldKey];
         if (field) fields[fieldKey] = field.id;
