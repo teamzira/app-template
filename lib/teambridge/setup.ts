@@ -4,7 +4,9 @@ import { configStore } from './config-store';
 import {
   guessBindings,
   invalidateSchema,
+  readAccountStructure,
   resolveSchema,
+  type AccountStructure,
   type ResolvedSchema,
   type SchemaBindings,
   type SchemaSpec,
@@ -56,8 +58,14 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
     );
   }
   const config = await configStore.get(client.accountId);
-  const bindings = config ? config.bindings : await initializeAccount(client, spec);
-  return resolveSchema(client, spec, { bindings });
+  if (config) return resolveSchema(client, spec, { bindings: config.bindings });
+
+  // First contact. The guess reads the account's collections and the fields
+  // of the ones it matches; the resolution that follows reads the same
+  // lists, so hand it what the guess read instead of reading them twice.
+  const structure = readAccountStructure(client);
+  const bindings = await initializeAccount(client, spec, structure);
+  return resolveSchema(client, spec, { bindings, structure });
 }
 
 /**
@@ -67,11 +75,18 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
  * obvious slots filled. Idempotent: the same account guesses the same way,
  * and once a config exists it is never guessed over — an admin's choices in
  * Settings, including "Not used", stay. Returns what was saved.
+ *
+ * Pass the `structure` the caller will resolve with so the guess and the
+ * resolution share their reads; without one the guess reads on its own.
  */
-export async function initializeAccount<S extends SchemaSpec>(client: TBClient, spec: S): Promise<SchemaBindings> {
+export async function initializeAccount<S extends SchemaSpec>(
+  client: TBClient,
+  spec: S,
+  structure: AccountStructure = readAccountStructure(client)
+): Promise<SchemaBindings> {
   const accountId = client.accountId;
   if (!accountId) throw new Error('initializeAccount needs a client that names its account.');
-  const bindings = await guessBindings(client, spec);
+  const bindings = await guessBindings(client, spec, undefined, structure);
   await configStore.set(accountId, { bindings, updatedAt: new Date().toISOString() });
   invalidateSchema(accountId);
   return bindings;
