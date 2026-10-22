@@ -10,6 +10,7 @@ import {
   type AccountStructure,
   type ResolvedSchema,
   type SchemaBindings,
+  type SchemaIssue,
   type SchemaSpec,
 } from './schema';
 
@@ -36,9 +37,9 @@ import {
  * they use `resolveAccountSchema()` to look without redirecting.
  *
  * A production deployment without a database can't save an admin's choices,
- * so it has no Settings page (`settingsEnabled`). There the gate returns the
- * unready schema instead of redirecting, and the page shows `SetupNotice`
- * (`components/setup-notice.tsx`) in place of its content.
+ * so it has no Settings page (`settingsEnabled`). There the gate throws
+ * `SchemaNotReadyError` instead of redirecting, and the page fails the way it
+ * fails for any other load error; the server log says what is missing.
  */
 
 /** App-local path of the setup page. The install hook returns it as `setupPath`. */
@@ -53,8 +54,8 @@ export const SETUP_PATH = '/setup/';
  *  - the section nav hides Settings, and `/setup/` redirects home;
  *  - the save action and the setup page's fields route refuse;
  *  - each account resolves from a fresh guess by name (`resolveByGuess`);
- *  - `requireSetup` returns an unready schema instead of redirecting, and the
- *    install hook asks Teambridge for no `setupPath`.
+ *  - `requireSetup` throws instead of redirecting when that guess leaves a
+ *    required slot unresolved, and the install hook asks for no `setupPath`.
  *
  * Choices saved into memory on a production server would last until the next
  * cold start, on one instance of several, so hiding the page is the honest
@@ -125,14 +126,14 @@ export async function initializeAccount<S extends SchemaSpec>(
 /**
  * `resolveAccountSchema`, plus the redirect: when a required collection or
  * field is unresolved (`resolved.ready === false`) the user is sent to the
- * setup page instead of a page that can't work.
+ * setup page instead of a page that can't work. So what it returns is always
+ * ready: every required field is there.
  *
- * Without Settings (`settingsEnabled`) there is no page to send anyone to, so
- * it returns the unready schema instead. Check `ready` and show the notice in
- * place of the page's content:
- *
- *   const resolved = await requireSetup(getTBClient({ accountId }), schema);
- *   if (!resolved.ready) return <SetupNotice issues={resolved.issues} />;
+ * Without Settings (`settingsEnabled`) there is no page to send anyone to,
+ * and nothing anyone using the app could do, so it throws
+ * `SchemaNotReadyError` instead. The page fails like it fails for any other
+ * load error, and the error's message, in the server log, says what is
+ * missing and why.
  *
  * `redirect()` works by throwing, so call this outside any `try`, or start the
  * `catch` with `unstable_rethrow(e)` from `next/navigation` (the demo page
@@ -145,6 +146,35 @@ export async function requireSetup<S extends SchemaSpec>(
   options: { setupPath?: string } = {}
 ): Promise<ResolvedSchema<S>> {
   const resolved = await resolveAccountSchema(client, spec);
-  if (!resolved.ready && settingsEnabled()) redirect(options.setupPath ?? SETUP_PATH);
+  if (!resolved.ready) {
+    if (settingsEnabled()) redirect(options.setupPath ?? SETUP_PATH);
+    throw new SchemaNotReadyError(client.accountId ?? '', resolved.issues);
+  }
   return resolved;
+}
+
+/**
+ * Thrown by `requireSetup` on a deployment without Settings when a required
+ * slot is unresolved. It is for the server log, not for people using the
+ * app: catch it like any other load error and show the page's usual error
+ * state. The message names the account and the missing slots.
+ */
+export class SchemaNotReadyError extends Error {
+  readonly accountId: string;
+  readonly issues: SchemaIssue[];
+
+  constructor(accountId: string, issues: SchemaIssue[]) {
+    const missing = issues
+      .filter((issue) => issue.blocking)
+      .map((issue) => (issue.field ? `${issue.collection} → ${issue.field}` : issue.collection))
+      .join(', ');
+    super(
+      `[Teambridge] Account ${accountId} is missing required collections or fields (${missing}), and this ` +
+        'deployment has no database (DATABASE_URL), so they cannot be chosen in Settings. The guess by name ' +
+        'found no single match for them. Add the Neon integration, or pin their ids in app/schema.ts.'
+    );
+    this.name = 'SchemaNotReadyError';
+    this.accountId = accountId;
+    this.issues = issues;
+  }
 }

@@ -340,11 +340,10 @@ export const schema = defineSchema({
   },
 });
 
-// in a server component / action / route
+// in a server component (actions and routes use resolveAccountSchema and check `ready`)
 const { accountId } = await getTBContext();
-const resolved = await resolveSchema(getTBClient({ accountId }), schema);
-if (!resolved.ready) { /* render a setup notice from resolved.issues */ }
-const start = resolved.collections.shifts.fields.start; // Field | null
+const resolved = await requireSetup(getTBClient({ accountId }), schema); // the gate: see "Per-account configuration"
+const start = resolved.collections.shifts.fields.start; // Field; required, so never null here
 ```
 
 - **Ids resolve, names guess.** A slot resolves from the id bound to it for the account, or from the `id` pinned in the spec as the default; the resolver never looks a collection or field up by name. Names are used once, by `guessBindings`, to make a good-faith first guess at an account's bindings (the one collection or field with the slot's name and type), which is saved as ids. After that a rename in Teambridge ("Location" becomes "Facility") changes nothing. Pin ids when the app is built for a known account; other accounts get the guess and correct it in setup (see "Per-account configuration").
@@ -494,10 +493,10 @@ Mark a slot `required` only when the app cannot do anything useful without it. E
 
 | Slot | Unresolved | What happens |
 |---|---|---|
-| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/`, the install hook returns `setupPath`. Without a database: no redirect, and the page shows `SetupNotice` in place of its content. |
+| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/`, the install hook returns `setupPath`. Without a database: `requireSetup` throws, and the page fails like any other load error. |
 | optional | | `ready` stays true, the issue is non-blocking, the page renders. Show `SetupNotice` above the content, and degrade. |
 
-`SetupNotice` (`components/setup-notice.tsx`) is the one notice for both, and it decides what to say: with Settings it lists the issues and links there; without a database it says which collection or field the account needs, by name, for an admin to rename in Teambridge. It leaves out `not-used`, which means the admin chose "Not used" for an optional slot in Settings: a decision, not a problem. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice when non-blocking.
+`SetupNotice` (`components/setup-notice.tsx`) lists the non-blocking issues with a link to Settings. It leaves out `not-used`, which means the admin chose "Not used" for an optional slot in Settings: a decision, not a problem. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice. Without a database it renders nothing, since nobody using the app could change anything there.
 
 ### How bindings and pinned ids interact
 
@@ -525,19 +524,17 @@ export default async function Page() {
   const { accountId } = await getTBContext();
   try {
     const resolved = await requireSetup(getTBClient({ accountId }), schema);
-    // Only without a database: there is no Settings page to redirect to.
-    if (!resolved.ready) return <SetupNotice issues={resolved.issues} className="m-6" />;
     const start = resolved.collections.shifts.fields.start; // never null past this line when required
     // … render the page, with <SetupNotice issues={resolved.issues} /> above the content
   } catch (e) {
     unstable_rethrow(e); // the redirect travels as an exception
-    // log, and show a specific message
+    // log, and show the page's usual error (SchemaNotReadyError lands here too)
   }
 }
 ```
 
 - Every page calls it before reading records. `redirect()` throws, so either keep the call outside your `try`, or open the `catch` with `unstable_rethrow(e)` as above. A `catch` that maps every error to a message turns the redirect into an error alert.
-- Every page checks `resolved.ready` right after. With Settings the gate never returns an unready schema; without a database it does, and required fields are `null` past that line unless the page stops there.
+- Without a database there is no Settings page to redirect to, so the gate throws `SchemaNotReadyError` instead. Let it fall into the page's ordinary error state, like any failed load: log it and show the usual "Couldn't load …" message. Its message, for the server log, names the account and what is missing; nothing about it is for the people using the app.
 - Don't gate `/setup/` itself, API routes, server actions or the lifecycle hooks. Those use `resolveAccountSchema()` and handle `ready === false` as a result, not a redirect.
 - Nothing restricts who reaches `/setup/` or the save action: no role or permission reaches the app from Teambridge yet, so anyone who can open the app can change its settings. Say so in your app's docs rather than inventing a check. When a signed permission claim arrives, gate the page and `saveSetup` on it in one place.
 
@@ -571,14 +568,14 @@ A production build without `DATABASE_URL` (an app deployed before the template r
 
 - **Settings is hidden.** The section nav has no link, `/setup/` redirects home, and the save action and the setup page's fields route refuse.
 - **Each account resolves from the guess alone** (`resolveByGuess`): the one collection and field with each slot's name and type, or the id pinned in the spec. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
-- **The gate shows the notice in place.** `requireSetup` returns the unready schema instead of redirecting, and the page renders `SetupNotice`, which names the collection or field the account needs for an admin to rename in Teambridge.
+- **When the guess can't fill a required slot, the app fails.** `requireSetup` throws `SchemaNotReadyError`, the page shows its ordinary load error, and the error's message in the server log names the account, the missing slots and the cause. `SetupNotice` renders nothing, so optional slots that don't match just leave their features off.
 - **The install hook asks for no `setupPath`**, since there is no setup page to open.
 
-What people using the app see never mentions a database, a deployment or configuration: they know Teambridge, not how the app is built. Write any copy of your own the same way, and leave the cause to the server log, which warns once. `next dev` keeps Settings with the memory store, so developing the flow needs no database; to see a deployment without one, run a production build (`next build && next start`) without `DATABASE_URL`.
+What people using the app see never mentions a database, a deployment, configuration or a workaround: they know Teambridge, not how the app is built, and without Settings there is nothing they could do. The app works or it fails like any other error; the cause goes to the server log, which also warns once that the database is missing. `next dev` keeps Settings with the memory store, so developing the flow needs no database; to see a deployment without one, run a production build (`next build && next start`) without `DATABASE_URL`.
 
 ### Testing the flow
 
-Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. A production build without `DATABASE_URL` (`TB_DEV_MODE=true next build`, then `next start`) shows the other mode: no Settings link, `/setup/` redirecting home, the notice in place of the content for an account missing a required name, and the app appearing as soon as the name is fixed. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, and the section nav and URL sync inside the host.
+Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. A production build without `DATABASE_URL` (`TB_DEV_MODE=true next build`, then `next start`) shows the other mode: no Settings link, `/setup/` redirecting home, the page's ordinary error for an account missing a required name (with `SchemaNotReadyError` in the server log), and the app appearing as soon as the name is fixed. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, and the section nav and URL sync inside the host.
 
 ## Project structure
 
@@ -596,7 +593,7 @@ app/
     install/route.ts  # Lifecycle webhooks (advisory; install returns setupPath when needed)
     uninstall/route.ts
 components/ui/        # shadcn primitives (own them, edit freely)
-components/setup-notice.tsx  # What an account is missing and how to fix it; every page renders it after requireSetup
+components/setup-notice.tsx  # Notice for optional slots an account hasn't set, linking to Settings; every page renders it
 lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
@@ -625,9 +622,8 @@ proxy.ts              # Request validation
 - Finding a collection or field by name in app code. The one name match is the first-contact guess (`guessBindings`); everything after it is by id.
 - Writing to the config store without `invalidateSchema(accountId)`, or keeping per-account state in a module-level map (routes don't share module state; use the store).
 - Calling `redirect()` from a Server Action. The proxy drops the redirect header; return a result and navigate in the client (see "Navigation & data fetching").
-- Deploying without `DATABASE_URL`. The app still runs, but on the guess by name alone, with Settings hidden; an account whose names don't match can't be set up. The server log warns about it. Add the Neon integration to the project.
-- Reading required fields after `requireSetup` without checking `resolved.ready`. Without a database the gate returns an unready schema rather than redirecting.
-- Telling people using the app about a database, a deployment or configuration. They only know Teambridge; name the collection or field instead, and leave the cause to the server log.
+- Deploying without `DATABASE_URL`. The app still runs, but on the guess by name alone, with Settings hidden; an account whose names don't match gets an error page. The server log warns about it. Add the Neon integration to the project.
+- Telling people using the app about a database, a deployment, configuration or a workaround. They only know Teambridge. When the app can't work, it fails like any other load error, and the cause goes to the server log.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
 - Catching Teambridge errors and returning empty data.

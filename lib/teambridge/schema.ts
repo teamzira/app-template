@@ -164,8 +164,6 @@ export interface SchemaIssue {
   collection: string;
   /** The field slot's label (`FieldSpec.name`), for field issues. */
   field?: string;
-  /** The field slot's expected types (`FieldSpec.type`), for field issues on a slot that declares them. */
-  types?: string[];
   /** Plain-language description, safe to show an admin. */
   message: string;
 }
@@ -456,16 +454,8 @@ function findField(
 ): Field | null {
   const blocking = collectionRequired && Boolean(spec.required);
   const slot = `${collectionLabel} → ${spec.name}`;
-  const types = typesOf(spec);
   const issue = (kind: SchemaIssue['kind'], message: string) =>
-    issues.push({
-      kind,
-      blocking,
-      collection: collectionLabel,
-      field: spec.name,
-      ...(types ? { types } : {}),
-      message,
-    });
+    issues.push({ kind, blocking, collection: collectionLabel, field: spec.name, message });
 
   if (bound === null) {
     issue('not-used', `"${slot}" is set to "Not used" in the app's settings.`);
@@ -488,6 +478,7 @@ function findField(
   }
   // The type is held whoever chose the field: a value the app writes as a
   // DATETIME must land in one.
+  const types = typesOf(spec);
   if (types && !types.includes(field.type)) {
     issue('wrong-type', `"${slot}" is set to "${field.name}", a ${field.type} field; this app expects ${types.join(' or ')}.`);
     return null;

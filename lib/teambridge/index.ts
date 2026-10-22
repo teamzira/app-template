@@ -63,7 +63,14 @@ export { handleTBInstall, handleTBUninstall } from './handlers';
 // the schema helpers stay at `@/lib/teambridge/schema`.
 export { configStore, createMemoryConfigStore, createPostgresConfigStore } from './config-store';
 export type { AccountConfig, ConfigStore } from './config-store';
-export { initializeAccount, requireSetup, resolveAccountSchema, settingsEnabled, SETUP_PATH } from './setup';
+export {
+  initializeAccount,
+  requireSetup,
+  resolveAccountSchema,
+  SchemaNotReadyError,
+  settingsEnabled,
+  SETUP_PATH,
+} from './setup';
 
 // URL + fetch helpers live at their own sub-paths so they're importable from
 // Client Components without pulling the rest of the barrel — which includes

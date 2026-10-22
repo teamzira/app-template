@@ -91,7 +91,7 @@ npx shadcn@latest add <name>
 │           └── uninstall/
 │               └── route.ts    # Uninstallation webhook (drops the account's config)
 ├── components/
-│   ├── setup-notice.tsx        # What an account is missing and how to fix it (every page renders it)
+│   ├── setup-notice.tsx        # Notice for optional slots an account hasn't set (every page renders it)
 │   └── ui/                     # shadcn primitives, themed to Alloy
 ├── lib/
 │   ├── teambridge/             # Teambridge integration
@@ -222,21 +222,22 @@ The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, in
 
 ### Setup and settings
 
-Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL` has no Settings page: it runs on the guess by name alone, and a page whose account is missing a required collection or field shows what to rename instead of redirecting. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
+Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL` has no Settings page: it runs on the guess by name alone, and an account missing a required collection or field gets the page's ordinary error, with the reason in the server log. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
 
 ### Handling Installation
 
 Teambridge calls `app/api/teambridge/install/route.ts` when an admin installs the app on an account, and `uninstall/route.ts` when they remove it. Both are advisory: the app's credentials already cover the account (or no longer do) whatever the hook returns. The template's install hook asks Teambridge to open the setup page right after install, but only for accounts that need it:
 
 ```tsx
-import { getTBClient, handleTBInstall, resolveAccountSchema, SETUP_PATH } from '@/lib/teambridge';
+import { getTBClient, handleTBInstall, resolveAccountSchema, settingsEnabled, SETUP_PATH } from '@/lib/teambridge';
 import { schema } from '@/app/schema';
 
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
   async ({ accountId }) => {
     const resolved = await resolveAccountSchema(getTBClient({ accountId }), schema);
-    return { success: true, setupPath: resolved.ready ? undefined : SETUP_PATH };
+    // No setup page to open without a database.
+    return { success: true, setupPath: resolved.ready || !settingsEnabled() ? undefined : SETUP_PATH };
   }
 );
 ```
@@ -324,7 +325,7 @@ readIds(value)                                        // link & select values �
 
 ```ts
 resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact
-requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved (without a database: returns it unready)
+requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved (without a database: throws SchemaNotReadyError)
 settingsEnabled()                                     // false in a production build without a database: no Settings page
 initializeAccount(client, spec, structure?)           // the first-contact guess + save, on its own
 configStore.get(accountId) / set(accountId, config) / delete(accountId)   // Postgres when DATABASE_URL is set, else memory; configStore.persistent says which

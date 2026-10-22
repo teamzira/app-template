@@ -73,7 +73,6 @@ export default async function Home({
   const credentials = getAppCredentials();
   let error: string | null = null;
   let setupIssues: SchemaIssue[] = [];
-  let schemaReady = true;
   let allShifts: MappedShift[] = [];
   let totalShiftCount = 0;
   const userNames: Record<string, string> = {};
@@ -84,17 +83,16 @@ export default async function Home({
       // Schema first. `requireSetup` resolves it with the app's own access
       // (account structure, cached per account) from the choices saved for
       // this account in Settings, and sends the user to /setup/ while a
-      // required collection or field is unresolved. A deployment without a
-      // database has no Settings page, so there it returns with `ready`
-      // false instead, and the page shows the notice where the shifts would
-      // be. Otherwise what's left in `issues` is non-blocking: an optional
-      // slot nobody has set yet, or one whose field was deleted. Those get
-      // the same notice above the table, and the feature degrades. Records
-      // are then read as the current user (`ctx.userContext`), so Teambridge
-      // applies their permissions.
+      // required collection or field is unresolved — so past this line every
+      // required field is there. (A deployment without a database has no
+      // Settings to send anyone to; there it throws, and the catch below
+      // shows the usual error.) What's left in `issues` is non-blocking: an
+      // optional slot nobody has set yet, or one whose field was deleted.
+      // Those get a notice and the feature degrades. Records are then read
+      // as the current user (`ctx.userContext`), so Teambridge applies their
+      // permissions.
       const resolved = await requireSetup(getTBClient({ accountId }), schema);
       setupIssues = resolved.issues;
-      schemaReady = resolved.ready;
       const client = getTBClient(ctx);
       const shifts = resolved.collections.shifts;
       const { start, end, assignee, published } = shifts.fields;
@@ -219,7 +217,7 @@ export default async function Home({
             <ClockIcon className="size-4 text-muted-foreground" />
             Shifts Overview
           </CardTitle>
-          {schemaReady && <CreateShiftModal users={usersList} />}
+          {!error && <CreateShiftModal users={usersList} />}
         </CardHeader>
 
         <FilterTabs current={currentFilter} />
@@ -243,8 +241,6 @@ export default async function Home({
               <AlertTitle>Couldn&apos;t load shifts</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-          ) : !schemaReady ? (
-            <SetupNotice issues={setupIssues} />
           ) : (
             <div className="space-y-4">
               <SetupNotice issues={setupIssues} />

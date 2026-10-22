@@ -19,7 +19,7 @@ import { schema } from '@/app/schema';
  * still has bindings from an earlier install) lands on the app itself; the
  * rest open setup with the obvious slots already filled. A deployment
  * without Settings (no database in production) never asks: there is no
- * setup page to open, and the app shows what's missing on the page itself.
+ * setup page to open.
  */
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
