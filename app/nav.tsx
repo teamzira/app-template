@@ -8,7 +8,9 @@
  * in-app navigation".
  *
  * Settings opens `/setup/`, prefilled with the account's current choices.
- * Anyone who can open the app can open it: no role reaches the app yet.
+ * Anyone who can open the app can open it: no role reaches the app yet. The
+ * layout passes `showSettings={settingsEnabled()}`, so a production
+ * deployment without a database, which can't save settings, has no link.
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -22,7 +24,7 @@ const configuration: NavItem[] = [{ href: '/setup/', label: 'Settings', icon: Se
 
 const trimSlash = (path: string) => path.replace(/\/+$/, '') || '/';
 
-export function AppNav() {
+export function AppNav({ showSettings }: { showSettings: boolean }) {
   const current = trimSlash(usePathname());
 
   const renderItem = ({ href, label, icon: Icon }: NavItem) => {
@@ -50,7 +52,7 @@ export function AppNav() {
       className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-2 md:w-56 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-3"
     >
       {sections.map(renderItem)}
-      <div className="flex gap-1 md:mt-auto md:flex-col">{configuration.map(renderItem)}</div>
+      {showSettings && <div className="flex gap-1 md:mt-auto md:flex-col">{configuration.map(renderItem)}</div>}
     </nav>
   );
 }

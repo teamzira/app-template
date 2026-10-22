@@ -28,7 +28,10 @@ export async function createShift(formData: FormData) {
     const shifts = resolved.collections.shifts;
     const { start, end, assignee: assigneeField } = shifts.fields;
     if (!resolved.ready || !shifts.id || !start || !end) {
-      return { error: "Can't create shifts yet: the Shifts collection is missing fields this app needs." };
+      // Logged, not shown: people using the app can't do anything about the
+      // account's setup from here.
+      console.error('[createShift] the schema is not ready', resolved.issues);
+      return { error: "Couldn't create the shift. Try again." };
     }
 
     // Write as the current user, so Teambridge applies their permissions.

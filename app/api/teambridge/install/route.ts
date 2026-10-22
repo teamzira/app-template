@@ -1,4 +1,4 @@
-import { getTBClient, handleTBInstall, resolveAccountSchema, SETUP_PATH } from '@/lib/teambridge';
+import { getTBClient, handleTBInstall, resolveAccountSchema, settingsEnabled, SETUP_PATH } from '@/lib/teambridge';
 import { invalidateSchema } from '@/lib/teambridge/schema';
 import { schema } from '@/app/schema';
 
@@ -17,7 +17,9 @@ import { schema } from '@/app/schema';
  * `resolveAccountSchema` guesses the account's bindings by name and saves
  * them, so an account whose collections carry the expected names (or that
  * still has bindings from an earlier install) lands on the app itself; the
- * rest open setup with the obvious slots already filled.
+ * rest open setup with the obvious slots already filled. A deployment
+ * without Settings (no database in production) never asks: there is no
+ * setup page to open.
  */
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
@@ -29,12 +31,12 @@ export const POST = handleTBInstall(
     try {
       // First contact guesses and saves bindings by name; see lib/teambridge/setup.ts.
       const resolved = await resolveAccountSchema(getTBClient({ accountId }), schema);
-      return { success: true, setupPath: resolved.ready ? undefined : SETUP_PATH };
+      return { success: true, setupPath: resolved.ready || !settingsEnabled() ? undefined : SETUP_PATH };
     } catch (e) {
       // Don't fail the install over a lookup. Send the installer to setup,
-      // where the page reports what's wrong.
+      // where the page reports what's wrong, if there is one.
       console.error('[Teambridge] Install: resolving the schema for', accountId, e);
-      return { success: true, setupPath: SETUP_PATH };
+      return { success: true, setupPath: settingsEnabled() ? SETUP_PATH : undefined };
     }
   }
 );

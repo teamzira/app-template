@@ -5,10 +5,12 @@ import {
   guessBindings,
   invalidateSchema,
   readAccountStructure,
+  resolveByGuess,
   resolveSchema,
   type AccountStructure,
   type ResolvedSchema,
   type SchemaBindings,
+  type SchemaIssue,
   type SchemaSpec,
 } from './schema';
 
@@ -33,10 +35,35 @@ import {
  *
  * The setup page itself, API routes and the lifecycle hooks don't call it;
  * they use `resolveAccountSchema()` to look without redirecting.
+ *
+ * A production deployment without a database can't save an admin's choices,
+ * so it has no Settings page (`settingsEnabled`). There the gate throws
+ * `SchemaNotReadyError` instead of redirecting, and the page fails the way it
+ * fails for any other load error; the server log says what is missing.
  */
 
 /** App-local path of the setup page. The install hook returns it as `setupPath`. */
 export const SETUP_PATH = '/setup/';
+
+/**
+ * Whether this deployment has a Settings page: true when the config store
+ * keeps data durably (Postgres, from `DATABASE_URL`), and in development,
+ * where the memory store is fine for trying the flow out. A production build
+ * without a database answers false, and then:
+ *
+ *  - the section nav hides Settings, and `/setup/` redirects home;
+ *  - the save action and the setup page's fields route refuse;
+ *  - each account resolves from a fresh guess by name (`resolveByGuess`);
+ *  - `requireSetup` throws instead of redirecting when that guess leaves a
+ *    required slot unresolved, and the install hook asks for no `setupPath`.
+ *
+ * Choices saved into memory on a production server would last until the next
+ * cold start, on one instance of several, so hiding the page is the honest
+ * option. Read it on the server; it reads the environment.
+ */
+export function settingsEnabled(): boolean {
+  return configStore.persistent || process.env.NODE_ENV !== 'production';
+}
 
 /**
  * Resolve `spec` for the client's account, applying the bindings saved for
@@ -47,6 +74,8 @@ export const SETUP_PATH = '/setup/';
  * On first contact with an account — no config saved yet, which is the
  * install hook's call or, for an account the hook never reached, its first
  * request — it initializes the account first (see `initializeAccount`).
+ * Without Settings (`settingsEnabled`) nothing is saved: every account
+ * resolves from the guess, made afresh (`resolveByGuess`).
  */
 export async function resolveAccountSchema<S extends SchemaSpec>(
   client: TBClient,
@@ -57,6 +86,8 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
       'resolveAccountSchema needs a client that names its account. Build it with getTBClient({ accountId }).'
     );
   }
+  if (!settingsEnabled()) return resolveByGuess(client, spec);
+
   const config = await configStore.get(client.accountId);
   if (config) return resolveSchema(client, spec, { bindings: config.bindings });
 
@@ -95,7 +126,14 @@ export async function initializeAccount<S extends SchemaSpec>(
 /**
  * `resolveAccountSchema`, plus the redirect: when a required collection or
  * field is unresolved (`resolved.ready === false`) the user is sent to the
- * setup page instead of a page that can't work.
+ * setup page instead of a page that can't work. So what it returns is always
+ * ready: every required field is there.
+ *
+ * Without Settings (`settingsEnabled`) there is no page to send anyone to,
+ * and nothing anyone using the app could do, so it throws
+ * `SchemaNotReadyError` instead. The page fails like it fails for any other
+ * load error, and the error's message, in the server log, says what is
+ * missing and why.
  *
  * `redirect()` works by throwing, so call this outside any `try`, or start the
  * `catch` with `unstable_rethrow(e)` from `next/navigation` (the demo page
@@ -108,6 +146,35 @@ export async function requireSetup<S extends SchemaSpec>(
   options: { setupPath?: string } = {}
 ): Promise<ResolvedSchema<S>> {
   const resolved = await resolveAccountSchema(client, spec);
-  if (!resolved.ready) redirect(options.setupPath ?? SETUP_PATH);
+  if (!resolved.ready) {
+    if (settingsEnabled()) redirect(options.setupPath ?? SETUP_PATH);
+    throw new SchemaNotReadyError(client.accountId ?? '', resolved.issues);
+  }
   return resolved;
+}
+
+/**
+ * Thrown by `requireSetup` on a deployment without Settings when a required
+ * slot is unresolved. It is for the server log, not for people using the
+ * app: catch it like any other load error and show the page's usual error
+ * state. The message names the account and the missing slots.
+ */
+export class SchemaNotReadyError extends Error {
+  readonly accountId: string;
+  readonly issues: SchemaIssue[];
+
+  constructor(accountId: string, issues: SchemaIssue[]) {
+    const missing = issues
+      .filter((issue) => issue.blocking)
+      .map((issue) => (issue.field ? `${issue.collection} → ${issue.field}` : issue.collection))
+      .join(', ');
+    super(
+      `[Teambridge] Account ${accountId} is missing required collections or fields (${missing}), and this ` +
+        'deployment has no database (DATABASE_URL), so they cannot be chosen in Settings. The guess by name ' +
+        'found no single match for them. Add the Neon integration, or pin their ids in app/schema.ts.'
+    );
+    this.name = 'SchemaNotReadyError';
+    this.accountId = accountId;
+    this.issues = issues;
+  }
 }

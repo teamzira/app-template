@@ -12,7 +12,12 @@
  *
  * Anyone who can open the app can open this page: no role or permission
  * reaches the app from Teambridge yet, so there is nothing to check against.
+ *
+ * A production deployment without a database can't save what is chosen here,
+ * so it has no Settings page (`settingsEnabled`): the nav hides the link, and
+ * this route sends anyone who still arrives (an old link or bookmark) home.
  */
+import { redirect } from 'next/navigation';
 import { AlertCircleIcon, AlertTriangleIcon } from 'lucide-react';
 import {
   getAppCredentials,
@@ -24,6 +29,7 @@ import {
 } from '@/lib/teambridge';
 import { configStore } from '@/lib/teambridge/config-store';
 import { guessBindings, type CollectionSpec, type SchemaBindings } from '@/lib/teambridge/schema';
+import { settingsEnabled } from '@/lib/teambridge/setup';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { schema } from '../schema';
 import {
@@ -35,6 +41,7 @@ import {
 } from './setup-form';
 
 export default async function SetupPage() {
+  if (!settingsEnabled()) redirect('/');
   const { accountId } = await getTBContext();
 
   if (!getAppCredentials()) {

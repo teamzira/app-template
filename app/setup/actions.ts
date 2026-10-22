@@ -3,6 +3,7 @@
 import { getTBClient, getTBContext, TBApiError } from '@/lib/teambridge';
 import { configStore } from '@/lib/teambridge/config-store';
 import { invalidateSchema, resolveSchema, type SchemaBindings } from '@/lib/teambridge/schema';
+import { settingsEnabled } from '@/lib/teambridge/setup';
 import { schema } from '../schema';
 
 /**
@@ -16,8 +17,15 @@ import { schema } from '../schema';
  * the wrong type, an id the account doesn't have — refuses the save with its
  * message. Non-blocking issues (an optional slot set to "Not used") go
  * through; the app degrades those features.
+ *
+ * On a deployment without Settings (`settingsEnabled`) it refuses: the page
+ * is hidden there, but an action is a public endpoint, and a save into a
+ * production server's memory would be lost at the next cold start.
  */
 export async function saveSetup(input: SchemaBindings): Promise<{ ok: true } | { error: string }> {
+  if (!settingsEnabled()) {
+    return { error: "These settings can't be changed here." };
+  }
   const { accountId } = await getTBContext();
   // A server action is a public endpoint: keep only the spec's keys and
   // well-formed values, whatever arrived.

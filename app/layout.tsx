@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { TBProvider, TBRouter, TBRecordEditWatcher } from '@/lib/teambridge';
+import { settingsEnabled } from '@/lib/teambridge/setup';
 import { AppNav } from './nav';
 import './globals.css';
 
@@ -36,7 +37,8 @@ export default function RootLayout({
           <TBRecordEditWatcher />
           {/* Section nav beside the content; `h-dvh` is the iframe's height, so only <main> scrolls. */}
           <div className="flex min-h-0 flex-col md:h-dvh md:flex-row">
-            <AppNav />
+            {/* No Settings link on a deployment that can't save settings (no database in production). */}
+            <AppNav showSettings={settingsEnabled()} />
             <main className="min-w-0 flex-1 md:overflow-y-auto">{children}</main>
           </div>
         </TBProvider>
