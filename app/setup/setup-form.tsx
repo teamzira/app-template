@@ -11,7 +11,7 @@
  * collection reloads its fields from `/api/setup/fields/` and prefills them
  * the same way. Saving goes through the `saveSetup` server action, which
  * validates and stores the bindings; the form then opens the app itself (a
- * `redirect()` inside the action would not survive the Teambridge proxy, see
+ * `redirect()` inside the action would reload the whole iframe, see
  * `./actions.ts`).
  */
 import { useState, useTransition } from 'react';

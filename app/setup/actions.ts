@@ -7,11 +7,9 @@ import { schema } from '../schema';
 
 /**
  * Save the admin's choices for this account. On success the form opens the
- * app; the action returns `{ ok: true }` rather than calling `redirect()`.
- * A redirect from a server action travels as a 303 whose `x-action-redirect`
- * header the Teambridge proxy does not forward, so the client never learns
- * where to go and reports "An unexpected response was received from the
- * server." A returned result is an ordinary 200, which the proxy passes on.
+ * app; the action returns `{ ok: true }` rather than calling `redirect()`,
+ * because inside Teambridge a redirect from a server action reloads the whole
+ * iframe instead of navigating client-side.
  *
  * Validation is the resolver itself: the schema is resolved with the new
  * bindings, and any blocking issue — a required slot left unset, a field of
