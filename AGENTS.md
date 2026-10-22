@@ -391,7 +391,7 @@ const locationId = location ? record[location.id] : null;
 const locationId = record.locationId;
 ```
 
-**Reference fields** (e.g. `Location` on a Shift, `Assignee` linking to Users) store the **record ID** of the related record, not its display name. To render names, build a `recordId → name` map from the related collection and look up by ID at render time. Fetch only the ids you need (`records.get` per id, or a filter), not the whole related collection. The `app/page.tsx` demo does this for the Assignee column.
+**Reference fields** (e.g. `Location` on a Shift, `Assignee` linking to Users) store the **record ID** of the related record, not its display name. To render names, use `lookupNames` (`lib/teambridge/lookup.ts`): pass the ids from the records on screen and the fields that make up the name, and it returns a `recordId → name` map. The Open API can't read several records by id in one call, so reading each linked record on every render is what spends the rate limit: 50 shifts with 50 different assignees is 50 calls a page view, from the account's 720 a minute. `lookupNames` keeps names per account for ten minutes, shares reads between concurrent requests, and reads at most 25 new records per call, leaving the rest for the next. Its cache is shared by every user of the account, so call it with the app's own access (`getTBClient({ accountId })`) and only with ids taken from records the current user read; pass records you already read in the request as `seed`. Never fetch the whole related collection to build the map. The `app/page.tsx` demo does this for the Assignee column.
 
 ### Reading values
 
@@ -441,7 +441,7 @@ Every Teambridge read is a network round trip from the app server, and the host 
 
 - **The proxy times out at 30 seconds** and returns a 504, which the host shows as a failed load. It also buffers the response, so nothing paints until the whole page is ready. By the time the iframe loads, the host has already spent seconds booting, so the app's own render must stay far from that limit.
 - **Rate limit: 720 requests/minute per app client per account**, shared by every user and every render on that account. A full scan of a 2,000-user collection is 40+ requests.
-- **Never full-scan big collections** (Users, Shifts, Locations) per render, and never inside a per-record loop. Filter server-side, fetch related records by id, or build lookup maps once per request.
+- **Never full-scan big collections** (Users, Shifts, Locations) per render, and never inside a per-record loop. Filter server-side, and get the names behind reference fields from `lookupNames`, which caches them per account across requests, rather than reading linked records one by one on every render.
 - `listAll(collectionId, { filters, maxPages })` pages 50 at a time, a few pages at once, and stops at `maxPages` (default 20) with a warning. If you hit the cap, the view needs a filter or paging, not a higher cap.
 - **Share work within a request.** Don't construct a separate client and schema lookup in every function. The token cache is module-wide (one token request per client, however many `TBClient`s you create), and `resolveSchema` is cached per account.
 - **Cache keys use `accountId` and `userId`, not `userContext`.** The signed context rotates every request, so keying on it means nothing is ever cached. Include every input that scopes the result: account, user, filters, page, search.
@@ -600,6 +600,7 @@ lib/
     schema.ts         # defineSchema / resolveSchema (by id) / guessBindings (by name, once) / invalidateSchema / toWriteValue / readIds
     config-store.ts   # Per-account config behind ConfigStore (Postgres via Neon when DATABASE_URL is set, else memory)
     setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / settingsEnabled / SETUP_PATH
+    lookup.ts         # lookupNames: display names for linked records, cached per account
     router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher
     fetch.ts, url.ts  # tbFetch / tbPath for the /apps/<slug> base path
   utils.ts            # cn() helper
@@ -625,6 +626,7 @@ proxy.ts              # Request validation
 - Deploying without `DATABASE_URL`. The app still runs, but on the guess by name alone, with Settings hidden; an account whose names don't match gets an error page. The server log warns about it. Add the Neon integration to the project.
 - Telling people using the app about a database, a deployment, configuration or a workaround. They only know Teambridge. When the app can't work, it fails like any other load error, and the cause goes to the server log.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
+- Reading linked records one by one on every render to show their names, such as an assignee per shift. Use `lookupNames`.
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
 - Catching Teambridge errors and returning empty data.
 - Error copy that says the app can't connect to Teambridge.

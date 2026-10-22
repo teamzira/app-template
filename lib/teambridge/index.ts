@@ -63,6 +63,10 @@ export { handleTBInstall, handleTBUninstall } from './handlers';
 // the schema helpers stay at `@/lib/teambridge/schema`.
 export { configStore, createMemoryConfigStore, createPostgresConfigStore } from './config-store';
 export type { AccountConfig, ConfigStore } from './config-store';
+
+// Display names for linked records, cached per account (also at `@/lib/teambridge/lookup`).
+export { invalidateNames, lookupNames, nameFrom } from './lookup';
+export type { LookupNamesOptions } from './lookup';
 export {
   initializeAccount,
   requireSetup,

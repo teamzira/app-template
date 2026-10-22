@@ -22,9 +22,12 @@ import {
   getTBContext,
   getTBClient,
   getAppCredentials,
+  lookupNames,
+  nameFrom,
   requireSetup,
   TBApiError,
   TBRecordLink,
+  type Field,
 } from '@/lib/teambridge';
 import { readIds, type SchemaIssue } from '@/lib/teambridge/schema';
 import { SetupNotice } from '@/components/setup-notice';
@@ -126,32 +129,29 @@ export default async function Home({
           };
         });
 
-        // Reference fields hold record ids, not names. Build an id → name map
-        // from the Users collection.
-        if (usersId && usersPage) {
-          const nameOf = (record: Record<string, unknown>) =>
-            [firstName && record[firstName.id], lastName && record[lastName.id]].filter(Boolean).join(' ').trim();
-
-          for (const record of usersPage.data) {
-            const name = nameOf(record);
-            if (!name) continue;
-            usersList.push({ id: record.id, name });
-            userNames[record.id] = name;
+        // Reference fields hold record ids, not names. The Users page, read as
+        // this user, feeds the assignee picker. The names in the table come
+        // from `lookupNames`, which caches them per account: a page view only
+        // reads users nobody has looked up in the last ten minutes, at most 25
+        // of them, and never the whole Users collection. Its cache is shared
+        // by every user of the account, so it reads with the app's own access
+        // and is only asked about assignees on shifts this user could read.
+        // See AGENTS.md → "Record field mapping".
+        if (usersId) {
+          const nameFields = [firstName, lastName].filter((field): field is Field => Boolean(field));
+          for (const record of usersPage?.data ?? []) {
+            const name = nameFrom(record, nameFields);
+            if (name) usersList.push({ id: record.id, name });
           }
           usersList.sort((a, b) => a.name.localeCompare(b.name));
 
-          // Assignees outside that page: fetch just those records, never the
-          // whole Users collection.
-          const missing = [...new Set(allShifts.map((shift) => shift.userId))].filter(
-            (id): id is string => Boolean(id) && !userNames[id!]
+          const names = await lookupNames(
+            getTBClient({ accountId }),
+            usersId,
+            allShifts.map((shift) => shift.userId),
+            { fields: nameFields, seed: usersPage?.data }
           );
-          const records = await Promise.all(
-            missing.map((id) => client.collections.records.get(usersId, id).catch(() => null))
-          );
-          for (const record of records) {
-            const name = record && nameOf(record);
-            if (record && name) userNames[record.id] = name;
-          }
+          for (const [id, name] of names) userNames[id] = name;
         }
       }
     } catch (e) {
