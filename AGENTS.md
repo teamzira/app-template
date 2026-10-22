@@ -48,7 +48,7 @@ In dev mode (`TB_DEV_MODE=true`), `basePath` is empty and `tbFetch` is a no-op �
 
 A few cases to be careful with manually:
 
-- **`redirect()` inside a Server Action.** It travels as a 303 whose `x-action-redirect` header the Teambridge proxy does not forward, so the client never learns where to go and shows "An unexpected response was received from the server." Return a result from the action (`{ ok: true }`) and navigate in the client with `useRouter().push(...)`, as `app/setup/setup-form.tsx` does. `redirect()` from a Server Component render is fine: that is a document redirect, and the gate relies on it.
+- **`redirect()` inside a Server Action.** Return a result from the action (`{ ok: true }`) and navigate in the client with `useRouter().push(...)`, as `app/setup/setup-form.tsx` does. Inside Teambridge, a redirect from a Server Action can't navigate client-side, so it reloads the whole iframe at the target page. `redirect()` from a Server Component render is fine: that is a document redirect, and the gate relies on it.
 - Raw `<a href="/foo">` and `<form action="/foo">` — `basePath` only applies to Next.js's own primitives. For native HTML, prepend the prefix yourself with `tbPath()` (imported from `@/lib/teambridge/url`) if the URL needs to be same-origin.
 - Self-fetching your own route handlers from a server component. Don't; call the underlying logic directly instead (per [Vercel's guidance](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them)).
 - `lib/teambridge/client/TBClient.ts` deliberately uses raw `fetch` — it talks to external Teambridge APIs at absolute URLs, not to your app's own routes.
