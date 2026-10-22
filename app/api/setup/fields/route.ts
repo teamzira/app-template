@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTBClient, getTBContext, TBApiError, type Field } from '@/lib/teambridge';
 import { matchFields } from '@/lib/teambridge/schema';
+import { settingsEnabled } from '@/lib/teambridge/setup';
 import { schema } from '@/app/schema';
 
 /**
@@ -11,9 +12,11 @@ import { schema } from '@/app/schema';
  *
  * Field metadata is account structure, not user data, so this uses the app's
  * own access. The trailing slash in the path is required (`trailingSlash:
- * true` answers the slash-less form with a redirect).
+ * true` answers the slash-less form with a redirect). It exists only where
+ * the setup page does (`settingsEnabled`).
  */
 export async function GET(request: Request) {
+  if (!settingsEnabled()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const { accountId } = await getTBContext();
   const params = new URL(request.url).searchParams;
   const key = params.get('collection') ?? '';

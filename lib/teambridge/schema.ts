@@ -21,13 +21,15 @@ import type { Collection, Field } from './client/types';
  * slot's label on the setup page and in messages.
  *
  * Pass the bindings as `resolveSchema(client, spec, { bindings })`, or call
- * `resolveAccountSchema` / `requireSetup` from `./setup`, which load them.
+ * `resolveAccountSchema` / `requireSetup` from `./setup`, which load them. A
+ * deployment with nowhere to save bindings resolves from the guess alone,
+ * made afresh rather than saved (`resolveByGuess`).
  *
  * Unresolved slots are reported, not thrown: `issues` lists every one, and
  * `ready` is false only when a `required` slot is unresolved. `requireSetup`
- * sends the user to the setup page for those; render a notice for the
- * non-blocking ones (see the demo in `app/page.tsx`) and degrade the feature
- * that needs an optional slot.
+ * sends the user to the setup page for those; render `SetupNotice`
+ * (`components/setup-notice.tsx`) for the rest and degrade the feature that
+ * needs an optional slot.
  *
  * @example
  *   export const schema = defineSchema({
@@ -162,6 +164,8 @@ export interface SchemaIssue {
   collection: string;
   /** The field slot's label (`FieldSpec.name`), for field issues. */
   field?: string;
+  /** The field slot's expected types (`FieldSpec.type`), for field issues on a slot that declares them. */
+  types?: string[];
   /** Plain-language description, safe to show an admin. */
   message: string;
 }
@@ -272,10 +276,78 @@ export function resolveSchema<S extends SchemaSpec>(
  * New bindings miss the cache on their own, on every server instance, because
  * they are part of the key. What this clears is the entry for *unchanged*
  * bindings — which would otherwise keep reporting a field as missing for up
- * to five minutes after an admin added it and saved the settings again.
+ * to five minutes after an admin added it and saved the settings again —
+ * and, on a deployment without a database, the account's cached guess.
  */
 export function invalidateSchema(accountId: string): void {
   schemaCache().delete(accountId);
+  guessCache().delete(accountId);
+}
+
+type GuessEntry = { expiresAt: number; bindings: Promise<SchemaBindings> };
+type GuessCache = Map<string, Map<string, GuessEntry>>;
+const GUESS_CACHE_KEY = '__tbGuessCache';
+type WithGuessCache = typeof globalThis & { [GUESS_CACHE_KEY]?: GuessCache };
+
+/** accountId → spec → the guess `resolveByGuess` resolves from. On `globalThis` for the same reason as the schema cache. */
+function guessCache(): GuessCache {
+  const globals = globalThis as WithGuessCache;
+  return (globals[GUESS_CACHE_KEY] ??= new Map());
+}
+
+/**
+ * Resolve `spec` from a good-faith guess by name instead of saved bindings:
+ * how a deployment with nowhere to save them works (`resolveAccountSchema`
+ * in `./setup` calls it there). Nothing is stored. The guess is cached per
+ * account for the same five minutes as a resolution, except while it leaves
+ * a required slot unresolved: then each call guesses again, so an admin who
+ * renames a field in Teambridge to the name the app expects sees the app on
+ * the next load, and a healthy account costs no more reads than a saved one.
+ */
+export async function resolveByGuess<S extends SchemaSpec>(
+  client: TBClient,
+  spec: S
+): Promise<ResolvedSchema<S>> {
+  const accountId = client.accountId;
+  if (!accountId) {
+    throw new Error(
+      'resolveByGuess needs a client that names its account. Build it with getTBClient({ accountId }).'
+    );
+  }
+  const key = JSON.stringify(spec);
+  const cache = guessCache();
+  const now = Date.now();
+  const cached = cache.get(accountId)?.get(key);
+  if (cached && cached.expiresAt > now) {
+    return resolveSchema(client, spec, { bindings: await cached.bindings });
+  }
+
+  for (const [cachedAccountId, entries] of cache) {
+    for (const [cachedKey, entry] of entries) {
+      if (entry.expiresAt <= now) entries.delete(cachedKey);
+    }
+    if (entries.size === 0) cache.delete(cachedAccountId);
+  }
+
+  let entries = cache.get(accountId);
+  if (!entries) {
+    entries = new Map();
+    cache.set(accountId, entries);
+  }
+  // The guess and the resolution read the same lists; share them.
+  const structure = readAccountStructure(client);
+  const bindings = guessBindings(client, spec, undefined, structure);
+  const entry: GuessEntry = { expiresAt: now + SCHEMA_TTL_MS, bindings };
+  entries.set(key, entry);
+  const forget = () => {
+    const current = guessCache().get(accountId);
+    if (current?.get(key) === entry) current.delete(key);
+  };
+  bindings.catch(forget);
+
+  const resolved = await resolveSchema(client, spec, { bindings: await bindings, structure });
+  if (!resolved.ready) forget();
+  return resolved;
 }
 
 const typesOf = (spec: FieldSpec) => (spec.type ? (Array.isArray(spec.type) ? spec.type : [spec.type]) : null);
@@ -384,8 +456,16 @@ function findField(
 ): Field | null {
   const blocking = collectionRequired && Boolean(spec.required);
   const slot = `${collectionLabel} → ${spec.name}`;
+  const types = typesOf(spec);
   const issue = (kind: SchemaIssue['kind'], message: string) =>
-    issues.push({ kind, blocking, collection: collectionLabel, field: spec.name, message });
+    issues.push({
+      kind,
+      blocking,
+      collection: collectionLabel,
+      field: spec.name,
+      ...(types ? { types } : {}),
+      message,
+    });
 
   if (bound === null) {
     issue('not-used', `"${slot}" is set to "Not used" in the app's settings.`);
@@ -408,7 +488,6 @@ function findField(
   }
   // The type is held whoever chose the field: a value the app writes as a
   // DATETIME must land in one.
-  const types = typesOf(spec);
   if (types && !types.includes(field.type)) {
     issue('wrong-type', `"${slot}" is set to "${field.name}", a ${field.type} field; this app expects ${types.join(' or ')}.`);
     return null;

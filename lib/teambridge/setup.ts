@@ -5,6 +5,7 @@ import {
   guessBindings,
   invalidateSchema,
   readAccountStructure,
+  resolveByGuess,
   resolveSchema,
   type AccountStructure,
   type ResolvedSchema,
@@ -33,10 +34,35 @@ import {
  *
  * The setup page itself, API routes and the lifecycle hooks don't call it;
  * they use `resolveAccountSchema()` to look without redirecting.
+ *
+ * A production deployment without a database can't save an admin's choices,
+ * so it has no Settings page (`settingsEnabled`). There the gate returns the
+ * unready schema instead of redirecting, and the page shows `SetupNotice`
+ * (`components/setup-notice.tsx`) in place of its content.
  */
 
 /** App-local path of the setup page. The install hook returns it as `setupPath`. */
 export const SETUP_PATH = '/setup/';
+
+/**
+ * Whether this deployment has a Settings page: true when the config store
+ * keeps data durably (Postgres, from `DATABASE_URL`), and in development,
+ * where the memory store is fine for trying the flow out. A production build
+ * without a database answers false, and then:
+ *
+ *  - the section nav hides Settings, and `/setup/` redirects home;
+ *  - the save action and the setup page's fields route refuse;
+ *  - each account resolves from a fresh guess by name (`resolveByGuess`);
+ *  - `requireSetup` returns an unready schema instead of redirecting, and the
+ *    install hook asks Teambridge for no `setupPath`.
+ *
+ * Choices saved into memory on a production server would last until the next
+ * cold start, on one instance of several, so hiding the page is the honest
+ * option. Read it on the server; it reads the environment.
+ */
+export function settingsEnabled(): boolean {
+  return configStore.persistent || process.env.NODE_ENV !== 'production';
+}
 
 /**
  * Resolve `spec` for the client's account, applying the bindings saved for
@@ -47,6 +73,8 @@ export const SETUP_PATH = '/setup/';
  * On first contact with an account — no config saved yet, which is the
  * install hook's call or, for an account the hook never reached, its first
  * request — it initializes the account first (see `initializeAccount`).
+ * Without Settings (`settingsEnabled`) nothing is saved: every account
+ * resolves from the guess, made afresh (`resolveByGuess`).
  */
 export async function resolveAccountSchema<S extends SchemaSpec>(
   client: TBClient,
@@ -57,6 +85,8 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
       'resolveAccountSchema needs a client that names its account. Build it with getTBClient({ accountId }).'
     );
   }
+  if (!settingsEnabled()) return resolveByGuess(client, spec);
+
   const config = await configStore.get(client.accountId);
   if (config) return resolveSchema(client, spec, { bindings: config.bindings });
 
@@ -97,6 +127,13 @@ export async function initializeAccount<S extends SchemaSpec>(
  * field is unresolved (`resolved.ready === false`) the user is sent to the
  * setup page instead of a page that can't work.
  *
+ * Without Settings (`settingsEnabled`) there is no page to send anyone to, so
+ * it returns the unready schema instead. Check `ready` and show the notice in
+ * place of the page's content:
+ *
+ *   const resolved = await requireSetup(getTBClient({ accountId }), schema);
+ *   if (!resolved.ready) return <SetupNotice issues={resolved.issues} />;
+ *
  * `redirect()` works by throwing, so call this outside any `try`, or start the
  * `catch` with `unstable_rethrow(e)` from `next/navigation` (the demo page
  * does) — a `catch` that maps every error to a message would turn the
@@ -108,6 +145,6 @@ export async function requireSetup<S extends SchemaSpec>(
   options: { setupPath?: string } = {}
 ): Promise<ResolvedSchema<S>> {
   const resolved = await resolveAccountSchema(client, spec);
-  if (!resolved.ready) redirect(options.setupPath ?? SETUP_PATH);
+  if (!resolved.ready && settingsEnabled()) redirect(options.setupPath ?? SETUP_PATH);
   return resolved;
 }

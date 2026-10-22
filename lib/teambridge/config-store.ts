@@ -16,9 +16,10 @@ import type { SchemaBindings } from './schema';
  *  - **Postgres** when `DATABASE_URL` is set — which the Neon integration
  *    does for every deployment made from the README's deploy button. One
  *    table, one row per account, created on first use.
- *  - **Memory** otherwise, for standalone development only: it is empty
- *    after every restart or deploy, and each server instance has its own
- *    copy. Outside `TB_DEV_MODE` that is a misconfigured deployment, and the
+ *  - **Memory** otherwise. It is empty after every restart or deploy, and
+ *    each server instance has its own copy, so it is only for development:
+ *    a production build without `DATABASE_URL` hides Settings and resolves
+ *    each account by name alone (`settingsEnabled` in `./setup`), and the
  *    server log says so once.
  *
  * See AGENTS.md → "Per-account configuration" → "The config store".
@@ -31,6 +32,12 @@ export interface AccountConfig {
 }
 
 export interface ConfigStore {
+  /**
+   * Whether what is `set` survives a restart and is shared by every server
+   * instance. The app offers Settings only on a store that persists (or in
+   * development), because choices saved anywhere else are silently lost.
+   */
+  readonly persistent: boolean;
   /** The account's config, or null when it has never been saved (or was deleted on uninstall). */
   get(accountId: string): Promise<AccountConfig | null>;
   /** Replace the account's config. */
@@ -61,6 +68,7 @@ export function createMemoryConfigStore(): ConfigStore {
   const globals = globalThis as WithStoreGlobals;
   const entries = (globals[MEMORY_STORE_KEY] ??= new Map<string, AccountConfig>());
   return {
+    persistent: false,
     async get(accountId) {
       const config = entries.get(accountId);
       return config ? structuredClone(config) : null;
@@ -105,6 +113,7 @@ export function createPostgresConfigStore(connectionString: string): ConfigStore
   };
 
   return {
+    persistent: true,
     async get(accountId) {
       await table();
       const rows = await query()`SELECT config FROM account_config WHERE account_id = ${accountId}`;
@@ -148,9 +157,12 @@ async function createTable(sql: NeonQueryFunction<false, false>): Promise<void> 
 function chooseConfigStore(): ConfigStore {
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) return createPostgresConfigStore(connectionString);
-  if (process.env.TB_DEV_MODE !== 'true') {
+  // The condition under which `settingsEnabled()` in ./setup turns Settings
+  // off: a production build with nowhere durable to save.
+  if (process.env.NODE_ENV === 'production') {
     console.warn(
-      '[Teambridge] DATABASE_URL is not set, so per-account settings are kept in memory and lost on the next restart or deploy. ' +
+      '[Teambridge] DATABASE_URL is not set, so this deployment cannot save per-account settings: Settings is hidden, ' +
+        "and the app finds each account's collections and fields by name. " +
         'Add the Neon integration to the Vercel project (`vercel integration add neon`) or set DATABASE_URL.'
     );
   }
@@ -168,9 +180,12 @@ function selectedStore(): ConfigStore {
  * and memory on its first call (see `chooseConfigStore`), not at import, so
  * importing it has no side effects and a build without `DATABASE_URL` is
  * fine. To use a different database, change `chooseConfigStore` and nothing
- * else.
+ * else; a store that keeps data durably says so with `persistent: true`.
  */
 export const configStore: ConfigStore = {
+  get persistent() {
+    return selectedStore().persistent;
+  },
   get: (accountId) => selectedStore().get(accountId),
   set: (accountId, config) => selectedStore().set(accountId, config),
   delete: (accountId) => selectedStore().delete(accountId),

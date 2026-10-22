@@ -91,6 +91,7 @@ npx shadcn@latest add <name>
 │           └── uninstall/
 │               └── route.ts    # Uninstallation webhook (drops the account's config)
 ├── components/
+│   ├── setup-notice.tsx        # What an account is missing and how to fix it (every page renders it)
 │   └── ui/                     # shadcn primitives, themed to Alloy
 ├── lib/
 │   ├── teambridge/             # Teambridge integration
@@ -221,7 +222,7 @@ The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, in
 
 ### Setup and settings
 
-Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button arranges, and memory otherwise, for development only. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
+Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL` has no Settings page: it runs on the guess by name alone, and a page whose account is missing a required collection or field shows what to rename instead of redirecting. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
 
 ### Handling Installation
 
@@ -323,9 +324,10 @@ readIds(value)                                        // link & select values �
 
 ```ts
 resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact
-requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved
+requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved (without a database: returns it unready)
+settingsEnabled()                                     // false in a production build without a database: no Settings page
 initializeAccount(client, spec, structure?)           // the first-contact guess + save, on its own
-configStore.get(accountId) / set(accountId, config) / delete(accountId)   // Postgres when DATABASE_URL is set, else memory
+configStore.get(accountId) / set(accountId, config) / delete(accountId)   // Postgres when DATABASE_URL is set, else memory; configStore.persistent says which
 createPostgresConfigStore(connectionString) / createMemoryConfigStore()   // the two implementations behind it
 ```
 
@@ -361,12 +363,12 @@ interface TBContext {
 Deploy with the button at the top of this README. It clones the repository into your GitHub, GitLab or Bitbucket account, creates a Vercel project, and asks for the three things the app needs:
 
 1. **The four Teambridge values**: `TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET` and `APP_SLUG`, from the app's page in the Teambridge Dev Portal (Settings → Dev Portal), where you register the app first. None of them can be left for later: the proxy signs every request with the webhook secret, and the slug sets the path the app is served under. One deployment and one set of credentials serve every account the app is installed on. Deployments always build for the Teambridge proxy; the `TB_DEV_*` values are for local development only.
-2. **The Neon database**, which the button makes mandatory (`products` in its URL names Neon's Postgres product, and the flow won't deploy until it exists). This is the one step beyond the values, and the defaults are right: in the flow's Storage section click **Add** next to Neon, then **Continue**, then **Create**. The region, the Free plan and the generated name can all stay as they are. The dialog also offers two add-ons, Auth and Realtime; the app uses neither (users are already signed in to Teambridge, which identifies them on every request), so they can be left alone. Auth is on by default and does no harm beyond a few unused env vars; turn it off only if you want to keep the project tidy. Create provisions the database in a few seconds and connects it to the project, which sets `DATABASE_URL` (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment; that is where the app keeps each account's settings. No Neon account or sign-in is involved; billing, if any, goes through Vercel. Without the database the settings would live in the function's memory and vanish at the next cold start, and the server log says so. The free plan's one drawback is that the database suspends after five idle minutes, so the first request after a pause waits a second or so while it resumes.
+2. **The Neon database**, which the button makes mandatory (`products` in its URL names Neon's Postgres product, and the flow won't deploy until it exists). This is the one step beyond the values, and the defaults are right: in the flow's Storage section click **Add** next to Neon, then **Continue**, then **Create**. The region, the Free plan and the generated name can all stay as they are. The dialog also offers two add-ons, Auth and Realtime; the app uses neither (users are already signed in to Teambridge, which identifies them on every request), so they can be left alone. Auth is on by default and does no harm beyond a few unused env vars; turn it off only if you want to keep the project tidy. Create provisions the database in a few seconds and connects it to the project, which sets `DATABASE_URL` (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment; that is where the app keeps each account's settings. No Neon account or sign-in is involved; billing, if any, goes through Vercel. Without the database the app still runs, finding each account's collections and fields by name, but it has no Settings page for choosing different ones, and the server log says so. The free plan's one drawback is that the database suspends after five idle minutes, so the first request after a pause waits a second or so while it resumes.
 3. **The app's origin** in the Dev Portal: the project's production domain, `https://<project>.vercel.app` or a custom domain, never a per-deployment URL. On teams with Deployment Protection the generated deployment URLs sit behind Vercel Authentication, which the Teambridge proxy can't pass; the production domain stays public. The `/apps/<slug>` path is appended for you.
 
 The button's URL relies on the `products` parameter alone. The older `integration-ids` parameter opens the integration's legacy install window and keeps the flow from deploying even after the database exists, so don't add it back.
 
-The app runs anywhere Next.js does. Away from the button, set the four variables yourself and a `DATABASE_URL` from a Neon project (the settings store uses Neon's serverless driver, which talks to Neon's HTTP endpoint, so a Postgres elsewhere needs Neon's proxy in front of it); without `DATABASE_URL` the settings don't survive a restart.
+The app runs anywhere Next.js does. Away from the button, set the four variables yourself and a `DATABASE_URL` from a Neon project (the settings store uses Neon's serverless driver, which talks to Neon's HTTP endpoint, so a Postgres elsewhere needs Neon's proxy in front of it); without `DATABASE_URL` the app hides Settings and runs on the guess by name alone.
 
 ## Learn More
 

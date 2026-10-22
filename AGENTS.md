@@ -357,7 +357,7 @@ const start = resolved.collections.shifts.fields.start; // Field | null
 Accounts differ, so plan for the one that lacks a field the app wants:
 
 1. Mark it `required: true` only if the app truly can't work without it. Otherwise leave it optional and degrade the feature that uses it: hide the column, disable the action.
-2. Pages call `requireSetup()` first (see "Per-account configuration"). While a required slot is unresolved it sends the user to the setup page, where an admin binds the slot to whichever collection or field their account has for it, whatever it is called. Non-blocking issues stay in `resolved.issues`: render a notice for them (see `SetupNotice` in `app/page.tsx`) and degrade.
+2. Pages call `requireSetup()` first (see "Per-account configuration"). While a required slot is unresolved it sends the user to the setup page, where an admin binds the slot to whichever collection or field their account has for it, whatever it is called. Non-blocking issues stay in `resolved.issues`: render `<SetupNotice issues={resolved.issues} />` (`components/setup-notice.tsx`) and degrade.
 3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values. The setup page lets an admin pick any field of the right type; it can't create one. Creating the missing fields during app onboarding is planned, but not built yet.
 
 ### Collection name matching
@@ -467,6 +467,7 @@ Accounts differ: the collection this app calls "Shifts" may be "Rota" on one acc
 - `requireSetup()` (`lib/teambridge/setup.ts`) is the **gate** every page calls: it resolves the schema with the account's bindings and redirects to `/setup/` while a required slot is unresolved.
 - The **install hook** returns `setupPath: '/setup/'` only when a required slot is still unresolved after the guess, so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config.
 - **Settings** in the section nav (`app/nav.tsx`) reopens `/setup/` prefilled with the current choices, so an admin can rebind later, when a field was renamed or a different collection should be used, without reinstalling.
+- **Without a database** a production deployment has no Settings at all, and runs on the guess by name alone. See "Without a database".
 
 ### Adding a collection or field
 
@@ -493,10 +494,10 @@ Mark a slot `required` only when the app cannot do anything useful without it. E
 
 | Slot | Unresolved | What happens |
 |---|---|---|
-| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/`, the install hook returns `setupPath`. |
-| optional | | `ready` stays true, the issue is non-blocking, the page renders. Show it in a `SetupNotice` with a link to Settings, and degrade. |
+| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/`, the install hook returns `setupPath`. Without a database: no redirect, and the page shows `SetupNotice` in place of its content. |
+| optional | | `ready` stays true, the issue is non-blocking, the page renders. Show `SetupNotice` above the content, and degrade. |
 
-One issue kind is not for the page: `not-used` means the admin chose "Not used" for an optional slot in Settings. That is a decision, not a problem, so don't nag about it; the demo page filters it out of its notice. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice when non-blocking.
+`SetupNotice` (`components/setup-notice.tsx`) is the one notice for both, and it decides what to say: with Settings it lists the issues and links there; without a database it says which collection or field the account needs, by name, for an admin to rename in Teambridge. It leaves out `not-used`, which means the admin chose "Not used" for an optional slot in Settings: a decision, not a problem. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice when non-blocking.
 
 ### How bindings and pinned ids interact
 
@@ -508,23 +509,26 @@ One issue kind is not for the page: `not-used` means the admin chose "Not used" 
 
 Names never enter into resolution. Two accounts can call the same thing "Start Time" and "Shift Start" and both work (the first by the guess, the second by a choice in setup), and a rename on either changes nothing afterwards.
 
-`resolveAccountSchema(client, spec)` is the same call with the bindings loaded from the config store; `requireSetup` adds the redirect. Resolve with the app's own access, `getTBClient({ accountId })`.
+`resolveAccountSchema(client, spec)` is the same call with the bindings loaded from the config store (or, without a database, from a fresh guess: `resolveByGuess`); `requireSetup` adds the redirect. Resolve with the app's own access, `getTBClient({ accountId })`.
 
-The cache: resolutions are cached per account for five minutes, keyed by the spec's content and the bindings. New bindings miss the cache on their own on every server instance; `invalidateSchema(accountId)` clears the entry for *unchanged* bindings, so call it after every write to the config store (the setup action does) and in the lifecycle hooks. The cache and the in-memory store both live on `globalThis`, because Next bundles each route separately and a module-level map in the uninstall hook is not the one the page reads.
+The cache: resolutions are cached per account for five minutes, keyed by the spec's content and the bindings. New bindings miss the cache on their own on every server instance; `invalidateSchema(accountId)` clears the entry for *unchanged* bindings (and the account's cached guess, without a database), so call it after every write to the config store (the setup action does) and in the lifecycle hooks. The caches and the in-memory store all live on `globalThis`, because Next bundles each route separately and a module-level map in the uninstall hook is not the one the page reads.
 
 ### The gate
 
-```ts
+```tsx
 import { unstable_rethrow } from 'next/navigation';
 import { getTBClient, getTBContext, requireSetup } from '@/lib/teambridge';
+import { SetupNotice } from '@/components/setup-notice';
 import { schema } from './schema';
 
 export default async function Page() {
   const { accountId } = await getTBContext();
   try {
     const resolved = await requireSetup(getTBClient({ accountId }), schema);
+    // Only without a database: there is no Settings page to redirect to.
+    if (!resolved.ready) return <SetupNotice issues={resolved.issues} className="m-6" />;
     const start = resolved.collections.shifts.fields.start; // never null past this line when required
-    // …
+    // … render the page, with <SetupNotice issues={resolved.issues} /> above the content
   } catch (e) {
     unstable_rethrow(e); // the redirect travels as an exception
     // log, and show a specific message
@@ -533,6 +537,7 @@ export default async function Page() {
 ```
 
 - Every page calls it before reading records. `redirect()` throws, so either keep the call outside your `try`, or open the `catch` with `unstable_rethrow(e)` as above. A `catch` that maps every error to a message turns the redirect into an error alert.
+- Every page checks `resolved.ready` right after. With Settings the gate never returns an unready schema; without a database it does, and required fields are `null` past that line unless the page stops there.
 - Don't gate `/setup/` itself, API routes, server actions or the lifecycle hooks. Those use `resolveAccountSchema()` and handle `ready === false` as a result, not a redirect.
 - Nothing restricts who reaches `/setup/` or the save action: no role or permission reaches the app from Teambridge yet, so anyone who can open the app can change its settings. Say so in your app's docs rather than inventing a check. When a signed permission claim arrives, gate the page and `saveSetup` on it in one place.
 
@@ -547,9 +552,9 @@ export default async function Page() {
   ```
 
   `set` is an upsert, `get` is `null` for an account with no row, and `delete` is what the uninstall hook calls.
-- **Memory** otherwise, for standalone development. It is empty after every restart or deploy and each instance has its own copy; on Vercel Fluid Compute an admin's choices in Settings would vanish at the next cold start. So outside `TB_DEV_MODE` the server log carries one warning, and a deployment without `DATABASE_URL` is misconfigured, not degraded.
+- **Memory** otherwise. It is empty after every restart or deploy and each instance has its own copy, so it is for development only (`next dev`), where the whole flow works against it. A production build without `DATABASE_URL` doesn't save into it at all: it hides Settings (see "Without a database"), and the server log says so once.
 
-Locally `DATABASE_URL` is optional: the memory store is enough to develop against, and nothing in the flow behaves differently. To develop against the real store, pull the project's variables into a file of their own (`vercel env pull .env.development.local`; Next loads it beside `.env.local`) or paste a Neon connection string into `.env.local`. Neon's free plan suspends an idle database after five minutes, so the first query after a pause waits a moment while it resumes.
+Locally `DATABASE_URL` is optional: in `next dev` the memory store is enough to develop against, and nothing in the flow behaves differently. To develop against the real store, pull the project's variables into a file of their own (`vercel env pull .env.development.local`; Next loads it beside `.env.local`) or paste a Neon connection string into `.env.local`. Neon's free plan suspends an idle database after five minutes, so the first query after a pause waits a moment while it resumes.
 
 Whatever the store:
 
@@ -558,11 +563,22 @@ Whatever the store:
 
 **The app's own tables.** The database is the app's, so its own data goes beside `account_config` in tables of its own, each scoped by account id (one deployment serves every account the app is installed on). The template creates its one table on first use because that table never changes; the app's tables will, so once there are any, manage them with migrations rather than more `CREATE TABLE IF NOT EXISTS`. Drizzle fits this driver: `drizzle-orm/neon-http` over the same `neon()` connection, `drizzle-kit generate` and `migrate` for the migrations, run with the environment loaded, which its CLI doesn't do on its own (`npx dotenv -e .env.local -- npx drizzle-kit migrate`). `account_config` can stay as it is or move into those migrations; the store doesn't mind a table that already exists.
 
-To use a different database, change `chooseConfigStore` in `lib/teambridge/config-store.ts` (a `ConfigStore` is `get`, `set` and `delete`, keyed by account id). The setup page, the gate and the hooks all go through the `configStore` export and don't change.
+To use a different database, change `chooseConfigStore` in `lib/teambridge/config-store.ts` (a `ConfigStore` is `get`, `set` and `delete`, keyed by account id, and `persistent: true` for a store that keeps data across restarts and instances). The setup page, the gate and the hooks all go through the `configStore` export and don't change.
+
+### Without a database
+
+A production build without `DATABASE_URL` (an app deployed before the template required Neon, a project whose database was removed, a host other than Vercel) has nowhere durable to save an admin's choices. Saving into memory would look like it worked and then be lost at the next cold start, on one server instance of several, so the app doesn't offer it. `settingsEnabled()` (`lib/teambridge/setup.ts`) is false there, and:
+
+- **Settings is hidden.** The section nav has no link, `/setup/` redirects home, and the save action and the setup page's fields route refuse.
+- **Each account resolves from the guess alone** (`resolveByGuess`): the one collection and field with each slot's name and type, or the id pinned in the spec. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
+- **The gate shows the notice in place.** `requireSetup` returns the unready schema instead of redirecting, and the page renders `SetupNotice`, which names the collection or field the account needs for an admin to rename in Teambridge.
+- **The install hook asks for no `setupPath`**, since there is no setup page to open.
+
+What people using the app see never mentions a database, a deployment or configuration: they know Teambridge, not how the app is built. Write any copy of your own the same way, and leave the cause to the server log, which warns once. `next dev` keeps Settings with the memory store, so developing the flow needs no database; to see a deployment without one, run a production build (`next build && next start`) without `DATABASE_URL`.
 
 ### Testing the flow
 
-Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, and the section nav and URL sync inside the host.
+Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. A production build without `DATABASE_URL` (`TB_DEV_MODE=true next build`, then `next start`) shows the other mode: no Settings link, `/setup/` redirecting home, the notice in place of the content for an account missing a required name, and the app appearing as soon as the name is fixed. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, and the section nav and URL sync inside the host.
 
 ## Project structure
 
@@ -580,12 +596,13 @@ app/
     install/route.ts  # Lifecycle webhooks (advisory; install returns setupPath when needed)
     uninstall/route.ts
 components/ui/        # shadcn primitives (own them, edit freely)
+components/setup-notice.tsx  # What an account is missing and how to fix it; every page renders it after requireSetup
 lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
     schema.ts         # defineSchema / resolveSchema (by id) / guessBindings (by name, once) / invalidateSchema / toWriteValue / readIds
     config-store.ts   # Per-account config behind ConfigStore (Postgres via Neon when DATABASE_URL is set, else memory)
-    setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / SETUP_PATH
+    setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / settingsEnabled / SETUP_PATH
     router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher
     fetch.ts, url.ts  # tbFetch / tbPath for the /apps/<slug> base path
   utils.ts            # cn() helper
@@ -608,7 +625,9 @@ proxy.ts              # Request validation
 - Finding a collection or field by name in app code. The one name match is the first-contact guess (`guessBindings`); everything after it is by id.
 - Writing to the config store without `invalidateSchema(accountId)`, or keeping per-account state in a module-level map (routes don't share module state; use the store).
 - Calling `redirect()` from a Server Action. The proxy drops the redirect header; return a result and navigate in the client (see "Navigation & data fetching").
-- Deploying without `DATABASE_URL`. The config store falls back to memory, which is empty after every deploy and cold start, so every admin's choices in Settings are lost; the server log warns about it. Add the Neon integration to the project.
+- Deploying without `DATABASE_URL`. The app still runs, but on the guess by name alone, with Settings hidden; an account whose names don't match can't be set up. The server log warns about it. Add the Neon integration to the project.
+- Reading required fields after `requireSetup` without checking `resolved.ready`. Without a database the gate returns an unready schema rather than redirecting.
+- Telling people using the app about a database, a deployment or configuration. They only know Teambridge; name the collection or field instead, and leave the cause to the server log.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
 - Catching Teambridge errors and returning empty data.

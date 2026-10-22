@@ -27,6 +27,7 @@ import {
   TBRecordLink,
 } from '@/lib/teambridge';
 import { readIds, type SchemaIssue } from '@/lib/teambridge/schema';
+import { SetupNotice } from '@/components/setup-notice';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -72,6 +73,7 @@ export default async function Home({
   const credentials = getAppCredentials();
   let error: string | null = null;
   let setupIssues: SchemaIssue[] = [];
+  let schemaReady = true;
   let allShifts: MappedShift[] = [];
   let totalShiftCount = 0;
   const userNames: Record<string, string> = {};
@@ -82,15 +84,17 @@ export default async function Home({
       // Schema first. `requireSetup` resolves it with the app's own access
       // (account structure, cached per account) from the choices saved for
       // this account in Settings, and sends the user to /setup/ while a
-      // required collection or field is unresolved — so past this line every
-      // required field is there. What's left in `issues` is non-blocking: an
-      // optional slot nobody has set yet, or one whose field was deleted.
-      // Those get a notice and the feature degrades. `not-used` is the
-      // admin's own choice, so it isn't shown. Records are then read as the
-      // current user (`ctx.userContext`), so Teambridge applies their
-      // permissions.
+      // required collection or field is unresolved. A deployment without a
+      // database has no Settings page, so there it returns with `ready`
+      // false instead, and the page shows the notice where the shifts would
+      // be. Otherwise what's left in `issues` is non-blocking: an optional
+      // slot nobody has set yet, or one whose field was deleted. Those get
+      // the same notice above the table, and the feature degrades. Records
+      // are then read as the current user (`ctx.userContext`), so Teambridge
+      // applies their permissions.
       const resolved = await requireSetup(getTBClient({ accountId }), schema);
-      setupIssues = resolved.issues.filter((issue) => issue.kind !== 'not-used');
+      setupIssues = resolved.issues;
+      schemaReady = resolved.ready;
       const client = getTBClient(ctx);
       const shifts = resolved.collections.shifts;
       const { start, end, assignee, published } = shifts.fields;
@@ -215,7 +219,7 @@ export default async function Home({
             <ClockIcon className="size-4 text-muted-foreground" />
             Shifts Overview
           </CardTitle>
-          <CreateShiftModal users={usersList} />
+          {schemaReady && <CreateShiftModal users={usersList} />}
         </CardHeader>
 
         <FilterTabs current={currentFilter} />
@@ -239,9 +243,11 @@ export default async function Home({
               <AlertTitle>Couldn&apos;t load shifts</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          ) : !schemaReady ? (
+            <SetupNotice issues={setupIssues} />
           ) : (
             <div className="space-y-4">
-              {setupIssues.length > 0 && <SetupNotice issues={setupIssues} />}
+              <SetupNotice issues={setupIssues} />
               {filteredShifts.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -433,36 +439,6 @@ function StatusBadge({ published }: { published: boolean }) {
     <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Published</Badge>
   ) : (
     <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Draft</Badge>
-  );
-}
-
-/**
- * Shown for non-blocking schema issues: an optional slot nobody has set yet,
- * or one whose field was deleted. The feature that needs it is degraded
- * (here, the assignee and status columns) rather than the page failing.
- * Blocking issues never reach this — `requireSetup` sends those to the setup
- * page. Name exactly what's unresolved, and where to fix it.
- */
-function SetupNotice({ issues }: { issues: SchemaIssue[] }) {
-  return (
-    <Alert>
-      <AlertTriangleIcon />
-      <AlertTitle>Some features are limited</AlertTitle>
-      <AlertDescription>
-        <ul className="mt-1 list-disc space-y-1 pl-4">
-          {issues.map((issue) => (
-            <li key={`${issue.kind}/${issue.collection}/${issue.field ?? ''}`}>{issue.message}</li>
-          ))}
-        </ul>
-        <p className="mt-2">
-          Choose the collections and fields this app uses in{' '}
-          <Link href="/setup/" className="text-primary hover:underline">
-            Settings
-          </Link>
-          .
-        </p>
-      </AlertDescription>
-    </Alert>
   );
 }
 
