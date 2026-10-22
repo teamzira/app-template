@@ -103,6 +103,7 @@ npx shadcn@latest add <name>
 │   │   ├── schema.ts           # Schema resolution (+ per-account bindings) + write encoding
 │   │   ├── config-store.ts     # Per-account config store: Postgres (Neon) when DATABASE_URL is set, else memory
 │   │   ├── setup.ts            # requireSetup() gate + resolveAccountSchema()
+│   │   ├── lookup.ts           # lookupNames(): display names for linked records, cached per account
 │   │   ├── router/             # URL sync + record detail panel helpers
 │   │   └── handlers/           # Lifecycle handlers
 │   └── utils.ts                # cn() helper
@@ -331,6 +332,18 @@ initializeAccount(client, spec, structure?)           // the first-contact guess
 configStore.get(accountId) / set(accountId, config) / delete(accountId)   // Postgres when DATABASE_URL is set, else memory; configStore.persistent says which
 createPostgresConfigStore(connectionString) / createMemoryConfigStore()   // the two implementations behind it
 ```
+
+### Names for linked records
+
+`@/lib/teambridge/lookup` (also exported from `@/lib/teambridge`) turns the record ids in reference fields into display names without a read per record per page view:
+
+```ts
+lookupNames(client, collectionId, ids, { fields, seed?, maxReads? })   // → Map<recordId, name>; cached per account for 10 minutes
+nameFrom(record, fields)                                               // one record's name from those fields
+invalidateNames(accountId)                                             // after the app renames something it shows
+```
+
+Its cache is shared by every user of the account: read with `getTBClient({ accountId })`, and pass only ids from records the current user read. See [`AGENTS.md`](./AGENTS.md) → "Record field mapping".
 
 ### Record detail
 
