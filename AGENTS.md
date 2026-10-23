@@ -465,6 +465,7 @@ Accounts differ: the collection this app calls "Shifts" may be "Rota" on one acc
 - The **config store** (`lib/teambridge/config-store.ts`) keeps the bindings per account, behind a small interface: in Postgres when `DATABASE_URL` is set (the Neon integration), in memory otherwise, for development. See "The config store".
 - `requireSetup()` (`lib/teambridge/setup.ts`) is the **gate** every page calls: it resolves the schema with the account's bindings and redirects to `/setup/` while a required slot is unresolved.
 - The **install hook** returns `setupPath: '/setup/'` only when a required slot is still unresolved after the guess, so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config.
+- An **account template** can come with the app (its `apps`, by slug). Teambridge installs it last, once everything the template sets up exists, so the first-contact guess sees the template's collections and fields. Name each slot as the template names what it binds to, and a new account from that template works without a visit to setup.
 - **Settings** in the section nav (`app/nav.tsx`) reopens `/setup/` prefilled with the current choices, so an admin can rebind later, when a field was renamed or a different collection should be used, without reinstalling.
 - **Without a database** a production deployment has no Settings at all, and runs on the guess by name alone. See "Without a database".
 
