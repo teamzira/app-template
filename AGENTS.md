@@ -467,7 +467,7 @@ Accounts differ: the collection this app calls "Shifts" may be "Rota" on one acc
 - The **install hook** returns `setupPath: '/setup/'` only when a required slot is still unresolved after the guess, so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config.
 - An **account template** can come with the app (its `apps`, by slug). Teambridge installs it last, once everything the template sets up exists, so the first-contact guess sees the template's collections and fields. Name each slot as the template names what it binds to, and a new account from that template works without a visit to setup.
 - **Settings** in the section nav (`app/nav.tsx`) reopens `/setup/` prefilled with the current choices, so an admin can rebind later, when a field was renamed or a different collection should be used, without reinstalling.
-- **Without a database** a production deployment has no Settings at all, and runs on the guess by name alone. See "Without a database".
+- **Without a database**, which an app for one account doesn't need, a production deployment has no Settings at all and resolves each account from the ids pinned in the spec, or else the guess by name. See "Without a database".
 
 ### Adding a collection or field
 
@@ -484,7 +484,7 @@ shifts: {
 ```
 
 - The `name` is what the guess looks for and what the admin sees next to the picker, so use the term accounts actually use (check a real field list). Always give a `type`: the guess and the picker consider only fields of that type, and a bound field of another type is rejected. A slot without a type considers every field.
-- **Pin the id** when the app is built for a known account (`id: '…'` next to the name). The resolved id is `resolved.collections.shifts.fields.start.id`; log it once, or read it off the account's field list. A pinned id is the default for every account; an account's binding overrides it. An app meant for many accounts pins nothing and relies on the guess plus setup.
+- **Pin the id** when the app is built for a known account (`id: '…'` next to the name). The resolved id is `resolved.collections.shifts.fields.start.id`; log it once, or read it off the account's field list. A pinned id is the default for every account; an account's binding overrides it. An app meant for many accounts pins nothing and relies on the guess plus setup. An app for one account deployed without a database pins every slot, so that nothing it needs depends on a name (see "Without a database").
 - **Existing accounts** are not re-guessed when the spec grows: the guess runs only at first contact, and an admin's choices are never guessed over. A new slot is `not-set` on every account. If it is optional, the page shows a notice until an admin opens Settings, where the slot arrives prefilled with the guess, and saves (or marks it "Not used"). If it is required, the gate sends every account back to `/setup/` for just that slot, prefilled the same way, with everything it chose before intact. The gate reasons from `resolved.issues`, never from "this account has saved something".
 - **Renaming a key** in the spec (`start` → `startsAt`) orphans its bindings on every account: bindings for keys the spec doesn't have are ignored, and the slot is `not-set` again. Rename the display `name`, not the key.
 
@@ -543,7 +543,7 @@ export default async function Page() {
 
 `configStore` (`lib/teambridge/config-store.ts`) is the one place per-account state is kept. It chooses its backing store from the environment the first time it is used:
 
-- **Postgres** when `DATABASE_URL` is set. The README's deploy button requires the Neon integration, which sets it (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment of the project, so an app deployed from the button keeps its settings from the first request. The store goes through Neon's serverless driver over HTTP, one request per call, so there is no connection pool to keep alive on Fluid Compute. It creates its one table itself, once per instance, with `CREATE TABLE IF NOT EXISTS`:
+- **Postgres** when `DATABASE_URL` is set. The README's deploy button for several accounts adds the Neon integration, which sets it (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment of the project, so an app deployed from that button keeps its settings from the first request. The store goes through Neon's serverless driver over HTTP, one request per call, so there is no connection pool to keep alive on Fluid Compute. It creates its one table itself, once per instance, with `CREATE TABLE IF NOT EXISTS`:
 
   ```sql
   account_config(account_id text primary key, config jsonb not null, updated_at timestamptz not null)
@@ -565,14 +565,16 @@ To use a different database, change `chooseConfigStore` in `lib/teambridge/confi
 
 ### Without a database
 
-A production build without `DATABASE_URL` (an app deployed before the template required Neon, a project whose database was removed, a host other than Vercel) has nowhere durable to save an admin's choices. Saving into memory would look like it worked and then be lost at the next cold start, on one server instance of several, so the app doesn't offer it. `settingsEnabled()` (`lib/teambridge/setup.ts`) is false there, and:
+A production build without `DATABASE_URL` has nowhere durable to save an admin's choices. That is how an app for one account is meant to run (the README's deploy button for one account adds no database), and also what a project whose database was removed, or a host other than Vercel, gets. Saving into memory would look like it worked and then be lost at the next cold start, on one server instance of several, so the app doesn't offer it. `settingsEnabled()` (`lib/teambridge/setup.ts`) is false there, and:
 
 - **Settings is hidden.** The section nav has no link, `/setup/` redirects home, and the save action and the setup page's fields route refuse.
-- **Each account resolves from the guess alone** (`resolveByGuess`): the one collection and field with each slot's name and type, or the id pinned in the spec. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
+- **Each account resolves from the guess alone** (`resolveByGuess`): the id pinned in the spec when the account has it, or else the one collection and field with each slot's name and type. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
 - **When the guess can't fill a required slot, the app fails.** `requireSetup` throws `SchemaNotReadyError`, the page shows its ordinary load error, and the error's message in the server log names the account, the missing slots and the cause. `SetupNotice` renders nothing, so optional slots that don't match just leave their features off.
 - **The install hook asks for no `setupPath`**, since there is no setup page to open.
 
-What people using the app see never mentions a database, a deployment, configuration or a workaround: they know Teambridge, not how the app is built, and without Settings there is nothing they could do. The app works or it fails like any other error; the cause goes to the server log, which also warns once that the database is missing. `next dev` keeps Settings with the memory store, so developing the flow needs no database; to see a deployment without one, run a production build (`next build && next start`) without `DATABASE_URL`.
+**An app for one account** pins every slot's id in `app/schema.ts` (read them off the account's field list, see "Adding a collection or field"). Then it finds its collections and fields by id, a rename in Teambridge changes nothing, and the name is only a fallback. An app that keeps data of its own in tables (see "The config store") needs the database whatever the number of accounts. When an app for one account goes on a second, add the database (README → "Deployment") and redeploy: Settings appears, and each account's first request saves what the guess was already finding as its starting bindings.
+
+What people using the app see never mentions a database, a deployment, configuration or a workaround: they know Teambridge, not how the app is built, and without Settings there is nothing they could do. The app works or it fails like any other error; the cause goes to the server log, which also notes once that there is no database. `next dev` keeps Settings with the memory store, so developing the flow needs no database; to see a deployment without one, run a production build (`next build && next start`) without `DATABASE_URL`.
 
 ### Testing the flow
 
@@ -624,7 +626,7 @@ proxy.ts              # Request validation
 - Finding a collection or field by name in app code. The one name match is the first-contact guess (`guessBindings`); everything after it is by id.
 - Writing to the config store without `invalidateSchema(accountId)`, or keeping per-account state in a module-level map (routes don't share module state; use the store).
 - Calling `redirect()` from a Server Action. The proxy drops the redirect header; return a result and navigate in the client (see "Navigation & data fetching").
-- Deploying without `DATABASE_URL`. The app still runs, but on the guess by name alone, with Settings hidden; an account whose names don't match gets an error page. The server log warns about it. Add the Neon integration to the project.
+- Deploying an app for several accounts without `DATABASE_URL`. It still runs, but on the pinned ids and the guess by name alone, with Settings hidden; an account whose names don't match gets an error page. Use the README's deploy button for several accounts, or add the Neon integration and redeploy. An app for one account doesn't need the database: pin its ids instead.
 - Telling people using the app about a database, a deployment, configuration or a workaround. They only know Teambridge. When the app can't work, it fails like any other load error, and the cause goes to the server log.
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
 - Reading linked records one by one on every render to show their names, such as an assignee per shift. Use `lookupNames`.

@@ -53,7 +53,8 @@ export const SETUP_PATH = '/setup/';
  *
  *  - the section nav hides Settings, and `/setup/` redirects home;
  *  - the save action and the setup page's fields route refuse;
- *  - each account resolves from a fresh guess by name (`resolveByGuess`);
+ *  - each account resolves from a fresh guess (`resolveByGuess`): the ids
+ *    pinned in the spec, or else the one match by name;
  *  - `requireSetup` throws instead of redirecting when that guess leaves a
  *    required slot unresolved, and the install hook asks for no `setupPath`.
  *
@@ -169,9 +170,10 @@ export class SchemaNotReadyError extends Error {
       .map((issue) => (issue.field ? `${issue.collection} → ${issue.field}` : issue.collection))
       .join(', ');
     super(
-      `[Teambridge] Account ${accountId} is missing required collections or fields (${missing}), and this ` +
-        'deployment has no database (DATABASE_URL), so they cannot be chosen in Settings. The guess by name ' +
-        'found no single match for them. Add the Neon integration, or pin their ids in app/schema.ts.'
+      `[Teambridge] Account ${accountId} is missing required collections or fields (${missing}): neither an id ` +
+        'pinned in app/schema.ts nor the guess by name found them, and this deployment has no database ' +
+        '(DATABASE_URL), so they cannot be chosen in Settings. Pin their ids in app/schema.ts, or, for an app ' +
+        'on several accounts, add the Neon integration and redeploy.'
     );
     this.name = 'SchemaNotReadyError';
     this.accountId = accountId;
