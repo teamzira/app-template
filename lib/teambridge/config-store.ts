@@ -14,13 +14,14 @@ import type { SchemaBindings } from './schema';
  * environment the first time it is used:
  *
  *  - **Postgres** when `DATABASE_URL` is set — which the Neon integration
- *    does for every deployment made from the README's deploy button. One
- *    table, one row per account, created on first use.
+ *    does for every deployment made from the README's deploy button for
+ *    several accounts. One table, one row per account, created on first use.
  *  - **Memory** otherwise. It is empty after every restart or deploy, and
  *    each server instance has its own copy, so it is only for development:
- *    a production build without `DATABASE_URL` hides Settings and resolves
- *    each account by name alone (`settingsEnabled` in `./setup`), and the
- *    server log says so once.
+ *    a production build without `DATABASE_URL` (an app for one account needs
+ *    none) hides Settings and resolves each account from the ids pinned in
+ *    the spec, or else a guess by name (`settingsEnabled` in `./setup`), and
+ *    the server log says so once.
  *
  * See AGENTS.md → "Per-account configuration" → "The config store".
  */
@@ -158,12 +159,14 @@ function chooseConfigStore(): ConfigStore {
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) return createPostgresConfigStore(connectionString);
   // The condition under which `settingsEnabled()` in ./setup turns Settings
-  // off: a production build with nowhere durable to save.
+  // off: a production build with nowhere durable to save. An app for one
+  // account runs this way on purpose, so it is a note, not a warning.
   if (process.env.NODE_ENV === 'production') {
-    console.warn(
-      '[Teambridge] DATABASE_URL is not set, so this deployment cannot save per-account settings: Settings is hidden, ' +
-        "and the app finds each account's collections and fields by name. " +
-        'Add the Neon integration to the Vercel project (`vercel integration add neon`) or set DATABASE_URL.'
+    console.info(
+      '[Teambridge] No DATABASE_URL, so Settings is hidden: each account resolves from the ids pinned in ' +
+        'app/schema.ts, or else a guess by name. That suits an app for one account. For an app on several ' +
+        'accounts, add the Neon integration to the Vercel project and redeploy, so each account can choose its ' +
+        'own collections and fields in Settings.'
     );
   }
   return createMemoryConfigStore();
