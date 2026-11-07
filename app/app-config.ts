@@ -9,7 +9,7 @@ import type { AppShellConfig } from '@/components/app-shell/types';
  */
 export const appConfig: AppShellConfig = {
   navStyle: 'tabs',
-  accent: 'azure',
+  accent: 'pink',
   sections: [
     { href: '/', label: 'Overview', icon: Home02Icon },
     { href: '/schedule/', label: 'Schedule', icon: CalendarIcon },

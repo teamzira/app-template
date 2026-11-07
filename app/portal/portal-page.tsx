@@ -4,6 +4,7 @@ import { AppPage } from '@/components/app-shell/page';
 import { SetupNotice } from '@/components/setup-notice';
 import type { PortalData } from './data';
 import { LocationFilter } from './location-filter';
+import { RequestShift } from './request-shift';
 
 type Props = {
   data: PortalData;
@@ -12,7 +13,8 @@ type Props = {
 
 /**
  * The title block every tab shares, so switching tabs changes only the content. Each tab route
- * renders its body inside it; an error replaces the body under the same title.
+ * renders its body inside it; an error replaces the body under the same title. Request shift is
+ * the page's one primary action, so it carries the account's colour.
  */
 export function PortalPage({ data, children }: Props) {
   return (
@@ -20,7 +22,12 @@ export function PortalPage({ data, children }: Props) {
       title="Coverage"
       description="Who's on site, and what's still open."
       actions={
-        data.locations.length > 1 ? <LocationFilter locations={data.locations} locationId={data.locationId} /> : undefined
+        <>
+          {data.locations.length > 1 && <LocationFilter locations={data.locations} locationId={data.locationId} />}
+          {data.status === 'ok' && (
+            <RequestShift locations={data.locations} roles={data.roles} locationId={data.locationId} />
+          )}
+        </>
       }
     >
       {data.status === 'error' ? (

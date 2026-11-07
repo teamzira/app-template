@@ -18,7 +18,7 @@ const MAX_PAGES = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type PortalData =
-  | { status: 'ok'; now: number; shifts: PortalShift[]; locations: PortalLocation[]; locationId: string | null; issues: SchemaIssue[] }
+  | { status: 'ok'; now: number; shifts: PortalShift[]; locations: PortalLocation[]; roles: PortalLocation[]; locationId: string | null; issues: SchemaIssue[] }
   | { status: 'error'; message: string; locations: PortalLocation[]; locationId: string | null };
 
 /**
@@ -45,7 +45,14 @@ export async function loadPortal(location: string | undefined): Promise<PortalDa
     }
 
     // A client sees a handful of locations; one page holds them all.
-    const locationPage = await userClient.collections.records.list(locationsSlot.id, { page: 0, pageSize: 50 });
+    const [locationPage, rolePage] = await Promise.all([
+      userClient.collections.records.list(locationsSlot.id, { page: 0, pageSize: 50 }),
+      roles.id ? userClient.collections.records.list(roles.id, { page: 0, pageSize: 50 }) : null,
+    ]);
+    const roleNameField = roles.fields.name;
+    const roleOptions = (rolePage?.data ?? [])
+      .map((record) => ({ id: record.id, name: roleNameField ? String(record[roleNameField.id] ?? 'Unnamed role') : 'Unnamed role' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
     locations = locationPage.data
       .map((record) => ({ id: record.id, name: String(record[locationName.id] ?? 'Unnamed location') }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -94,7 +101,7 @@ export async function loadPortal(location: string | undefined): Promise<PortalDa
       })
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
 
-    return { status: 'ok', now, shifts, locations, locationId, issues: resolved.issues };
+    return { status: 'ok', now, shifts, locations, roles: roleOptions, locationId, issues: resolved.issues };
   } catch (e) {
     unstable_rethrow(e);
     console.error('[Portal] loading shifts', e);
