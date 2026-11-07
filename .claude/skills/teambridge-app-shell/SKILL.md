@@ -129,7 +129,8 @@ site); ask if it isn't clear.
 | `green`   | green-700               | 6.9:1               |
 
 - It recolours only **primary `AlloyButton`s** (dialogs and menus included), the **selected tab's
-  underline** and the **selected sidebar row** (a light wash with the label in the accent).
+  underline** and the **selected sidebar row** (a light wash with the label in a shade of the
+  accent, 5:1 or better).
   Buttons with a semantic `accent` (`destructive`, `affirmative`) keep their own colour; disabled
   ones stay grey.
 - **Links** use the same colour with `text-(--app-accent)`.
