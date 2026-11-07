@@ -46,3 +46,9 @@
 .app-shell-accent [data-alloy-tabs-indicator] {
   background-color: var(--app-accent);
 }
+
+/* When the selected tab has overflowed into AlloyTabs' More menu, Alloy underlines the menu
+   trigger with its own span, which has no data-alloy-tabs-indicator. */
+.app-shell-accent .app-tab-nav span[aria-hidden="true"].bg-alloy-mono-1000 {
+  background-color: var(--app-accent);
+}
