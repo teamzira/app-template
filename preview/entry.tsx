@@ -7,7 +7,8 @@ import { startTransition, Suspense, use, useEffect, useState, type ReactNode } f
 import { createRoot } from 'react-dom/client';
 import { appConfig } from '@/app/app-config';
 import { AppShell } from '@/components/app-shell/app-shell';
-import { currentLocation, subscribeToLocation } from 'next/navigation';
+import { getAccentClasses } from '@/components/app-shell/utils';
+import { currentLocation, currentVersion, subscribeToLocation } from 'next/navigation';
 import { routes } from 'preview-app-routes';
 import { HostHeader } from './host-header';
 
@@ -20,7 +21,7 @@ export type PreviewRoutes = Record<string, (props: { searchParams: Promise<Searc
 const pages = new Map<string, Promise<ReactNode>>();
 
 function loadPage(pathname: string, search: string): Promise<ReactNode> {
-  const key = `${pathname}${search}`;
+  const key = `${currentVersion()}|${pathname}${search}`;
   let page = pages.get(key);
   if (!page) {
     const render = routes[pathname] ?? routes['/'];
@@ -68,6 +69,14 @@ function PreviewApp() {
     </div>
   );
 }
+
+// In the app the layout puts the accent on <body>, where Alloy portals dialogs. Here <body> holds
+// every sample, so it takes the accent of whichever one is on screen.
+window.addEventListener('preview:active', (event) => {
+  if ((event as CustomEvent<string>).detail === __PREVIEW_APP__) {
+    document.body.className = getAccentClasses(appConfig.accent);
+  }
+});
 
 const container = document.getElementById(`app-${__PREVIEW_APP__}`);
 if (container) createRoot(container).render(<PreviewApp />);

@@ -29,10 +29,11 @@ secrets. A few Alloy components (stat cards, segmented controls) import SCSS, wh
 | Branch | App | Nav |
 | --- | --- | --- |
 | `samples/timesheet` | Timesheet | none: one page |
-| `samples/client-portal` | Client portal | tabs |
+| `samples/client-portal` | Client portal | tabs, pink accent, Request shift |
+| `samples/job-orders` | Job orders | tabs, purple accent, New job order |
 | `samples/scheduling` | Scheduling | sidebar with a folder, a full-width calendar page and a side panel |
 
-**Preview without an account.** The `samples/preview` branch builds all three into one static
+**Preview without an account.** The `samples/preview` branch builds all the samples into one static
 page that runs in the browser on sample rows: `yarn preview:build` writes
 `preview/dist/index.html`. It checks out each sample's branch into `preview/.work/` and bundles the
 sample's own shell, pages and loaders; only Next's router, the Teambridge client (it serves

@@ -39,10 +39,21 @@ export function useSearchParams(): URLSearchParams {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
+// Bumped by refresh(), so pages read again after a write instead of coming from the cache.
+let version = 0;
+
+export function currentVersion(): number {
+  return version;
+}
+
 const router = {
   push: (href: string) => navigate(href),
   replace: (href: string) => navigate(href),
-  refresh: () => {},
+  refresh: () => {
+    version += 1;
+    location = { ...location };
+    listeners.forEach((listener) => listener());
+  },
   back: () => {},
   forward: () => {},
   prefetch: () => {},

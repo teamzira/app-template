@@ -109,6 +109,7 @@
         b.setAttribute('aria-pressed', String(b.dataset.name === active));
       });
       note.innerHTML = '<strong>' + sample.nav + '</strong> · sample data, nothing reads Teambridge';
+      window.dispatchEvent(new CustomEvent('preview:active', { detail: active }));
       if (fromClick && location.hash !== '#' + active) location.hash = active;
     }
 
@@ -130,6 +131,7 @@
 
     window.addEventListener('hashchange', function () { show(location.hash.slice(1), false); });
     show(location.hash.slice(1), false);
+    window.addEventListener('load', function () { show(active, false); });
   })();
 </script>
 <!-- PREVIEW_SCRIPTS -->

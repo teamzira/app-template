@@ -35,8 +35,9 @@ const alloySrc = path.join(repoRoot, 'node_modules', '@teamzira', 'alloy', 'src'
 
 export const SAMPLES = [
   { name: 'timesheet', label: 'Timesheet', nav: 'No nav: one page' },
-  { name: 'client-portal', label: 'Client portal', nav: 'Tabs' },
-  { name: 'scheduling', label: 'Scheduling', nav: 'Sidebar with a folder' },
+  { name: 'client-portal', label: 'Client portal', nav: 'Tabs, pink accent' },
+  { name: 'job-orders', label: 'Job orders', nav: 'Tabs, purple accent' },
+  { name: 'scheduling', label: 'Scheduling', nav: 'Sidebar with a folder, purple accent' },
 ];
 
 const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();

@@ -12,6 +12,7 @@ export type { Field } from '@/lib/teambridge/client/types';
 const fixtures = buildFixtures(new Date());
 
 export class TBApiError extends Error {
+  status = 0;
   isNotInstalled = false;
 }
 
@@ -49,6 +50,13 @@ const client = {
         const data = (fixtures[collectionId] ?? []).filter((r) => matches(r, options?.filters));
         return { data, totalCount: data.length, truncated: false };
       },
+      // Writes land in the page's own copy of the sample rows, so a created record shows up after
+      // the refresh that follows it, until the page reloads.
+      create: async (collectionId: string, data: Record<string, unknown>) => {
+        const id = `preview-new-${Date.now()}`;
+        (fixtures[collectionId] ??= []).push({ id, ...data });
+        return { id };
+      },
     },
   },
 };
@@ -78,6 +86,8 @@ export async function requireSetup<S extends SchemaSpec>(_client: unknown, spec:
   // Built from the spec at runtime, so its keys are only known as strings here.
   return { ready: true, collections, issues: [] } as unknown as ResolvedSchema<S>;
 }
+
+export const resolveAccountSchema = requireSetup;
 
 export async function lookupNames(
   _client: unknown,
