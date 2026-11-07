@@ -5,8 +5,9 @@ each drew their own version of the same thing (three stat-card styles, five ways
 so a page that follows this file looks like every other app without anyone comparing them.
 
 Paths are under `@teamzira/alloy/components/` (source in `node_modules/@teamzira/alloy/src/components/`). Read the component's `.tsx` before writing props.
-The sample apps (branches `samples/timesheet`, `samples/client-portal`, `samples/scheduling`) are
-working examples.
+The sample apps are working examples: `samples/timesheet` (no nav), `samples/client-portal`
+(tabs, pink), `samples/job-orders` (tabs, purple), `samples/scheduling` (sidebar with a folder,
+a calendar tool page) and `samples/staffing` (sidebar, green), all in `teamzira/app-template`.
 
 ## Pattern → component
 
