@@ -23,7 +23,8 @@ copy below. Layout rules live in the `teambridge-app-shell` skill
 Alloy is published privately to GitHub Packages, so installs need **`NPM_TOKEN`**, a GitHub token
 with `read:packages` for the `teamzira` org, in the environment (`.npmrc` reads it). Set it locally
 before `yarn install`, and in the Vercel project's environment variables alongside the four app
-secrets.
+secrets. A few Alloy components (stat cards, segmented controls) import SCSS, which is why
+`sass` is a dev dependency here.
 
 | Branch | App | Nav |
 | --- | --- | --- |
