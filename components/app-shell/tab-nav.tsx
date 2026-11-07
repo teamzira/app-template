@@ -19,23 +19,26 @@ export function AppTabNav({ sections }: { sections: AppSection[] }) {
   if (!isBrowser) return <div aria-hidden className="h-12 border-b border-alloy-slate-100" />;
 
   return (
-    <AlloyTabs
-      variant="underline"
-      value={current}
-      onChange={(href) => router.push(href)}
-      aria-label="App sections"
-      // Flush with the page column it sits in; the collapsed dropdown brings its own inset.
-      tablistClassName="px-0"
-    >
-      {sections.map((section) => (
-        <AlloyTabs.Tab
-          key={section.href}
-          value={section.href}
-          leadingIcon={section.icon && <section.icon size={16} />}
-        >
-          {section.label}
-        </AlloyTabs.Tab>
-      ))}
-    </AlloyTabs>
+    // `app-tab-nav` lets accent.css reach the overflow menu's underline.
+    <div className="app-tab-nav">
+      <AlloyTabs
+        variant="underline"
+        value={current}
+        onChange={(href) => router.push(href)}
+        aria-label="App sections"
+        // Flush with the page column it sits in; the collapsed dropdown brings its own inset.
+        tablistClassName="px-0"
+      >
+        {sections.map((section) => (
+          <AlloyTabs.Tab
+            key={section.href}
+            value={section.href}
+            leadingIcon={section.icon && <section.icon size={16} />}
+          >
+            {section.label}
+          </AlloyTabs.Tab>
+        ))}
+      </AlloyTabs>
+    </div>
   );
 }
