@@ -60,7 +60,8 @@ Sidebar                                     Tabs, or none
 
 - **Nav** — `AppShell` (in `app/layout.tsx`) draws it from `app/app-config.ts`. Sections are
   routes: each has an `href`, and the current one comes from the URL, so reloads and shared links
-  land on it.
+  land on it. The sidebar is an inset panel below Teambridge's header: 12px clear of the edges,
+  12px corners, on `--color-bg-secondary`, with no border.
 - **Page** — every page renders one `AppPage`: a centred column at the template's content width
   (`max-w-6xl`), 40px padding (16px on a phone), `gap-5` between blocks, and the title as an
   `AlloySectionHeader` `<h2>` (Teambridge's header holds the `<h1>`) with an optional one-sentence

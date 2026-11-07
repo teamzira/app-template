@@ -39,7 +39,8 @@ export function AppShell({ showSettings, children }: Props) {
     const phoneTabs = [...flattenSections(config.sections), ...(settings ? [settings] : [])];
     return (
       <div className={cn('flex h-dvh', accentClasses)}>
-        <div className="hidden h-full shrink-0 sm:flex">
+        {/* An inset panel under Teambridge's header, 12px clear of the iframe's edges. */}
+        <div className="hidden h-full shrink-0 p-3 sm:flex">
           <AppSideNav items={config.sections} settings={settings} />
         </div>
         <AppTabsProvider value={{ tabs: <AppTabNav sections={phoneTabs} />, isPhoneOnly: true }}>
