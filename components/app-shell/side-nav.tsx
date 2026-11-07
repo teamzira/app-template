@@ -75,10 +75,7 @@ export function AppSideNav({ items, settings }: Props) {
     <AlloySecondaryNav
       title="App sections"
       headerClassName="hidden"
-      // Alloy's rail is a full-height white column with a right border; here it is a rounded
-      // panel on the secondary surface. AlloySecondaryNav joins its classes without merging them,
-      // so the overrides are marked important to win whatever order Tailwind emits them in.
-      className="rounded-[12px]! border-0! bg-(--color-bg-secondary)! pt-2"
+      className="pt-2"
       bottomItems={settings ? renderSection(settings) : undefined}
     >
       {items.map((item) => (isFolder(item) ? renderFolder(item) : renderSection(item)))}
