@@ -38,6 +38,7 @@ export const SAMPLES = [
   { name: 'client-portal', label: 'Client portal', nav: 'Tabs, pink accent' },
   { name: 'job-orders', label: 'Job orders', nav: 'Tabs, purple accent' },
   { name: 'scheduling', label: 'Scheduling', nav: 'Sidebar with a folder, purple accent' },
+  { name: 'staffing', label: 'Staffing', nav: 'Sidebar, green accent' },
 ];
 
 const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();

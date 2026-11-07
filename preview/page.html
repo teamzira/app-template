@@ -59,8 +59,9 @@
   @media (max-width: 720px) {
     .preview-note { display: none; }
     .preview-name { display: none; }
-    .preview-switch { width: 100%; }
-    .preview-switch button { flex: 1; padding-inline: 6px; }
+    /* Five samples don't fit a phone's width; the switcher scrolls inside itself. */
+    .preview-switch { width: 100%; box-sizing: border-box; overflow-x: auto; scrollbar-width: none; }
+    .preview-switch button { flex: 0 0 auto; padding-inline: 10px; }
     :root { --bar-h: 52px; }
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -107,6 +108,7 @@
       });
       switcher.querySelectorAll('button').forEach(function (b) {
         b.setAttribute('aria-pressed', String(b.dataset.name === active));
+        if (b.dataset.name === active) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       });
       note.innerHTML = '<strong>' + sample.nav + '</strong> · sample data, nothing reads Teambridge';
       window.dispatchEvent(new CustomEvent('preview:active', { detail: active }));
