@@ -1,0 +1,23 @@
+/* Alloy keeps its fills inside its components, so an app's accent reaches them from here, scoped
+   to the shell and only to the plain primary button and the selected tab's underline. AlloyButton
+   fills a plain primary with `bg-alloy-mono-1000`; a semantic `accent` (destructive red,
+   affirmative green) carries its hue's class instead, so it keeps its meaning and contrast.
+   Disabled buttons keep Alloy's grey; hover and press darken the accent. */
+.app-shell-accent
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--app-accent);
+}
+
+.app-shell-accent
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]):hover {
+  filter: brightness(0.92);
+}
+
+.app-shell-accent
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]):active {
+  filter: brightness(0.84);
+}
+
+.app-shell-accent [data-alloy-tabs-indicator] {
+  background-color: var(--app-accent);
+}

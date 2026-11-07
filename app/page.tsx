@@ -30,6 +30,8 @@ import {
   type Field,
 } from '@/lib/teambridge';
 import { readIds, type SchemaIssue } from '@/lib/teambridge/schema';
+import { AppBanner } from '@/components/app-shell/banner';
+import { AppPage } from '@/components/app-shell/page';
 import { SetupNotice } from '@/components/setup-notice';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -181,14 +183,10 @@ export default async function Home({
         : allShifts;
 
   const firstName = user.name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <h1 className="text-xl font-semibold">
-        {greeting}, {firstName}
-      </h1>
+    <AppPage title="Shifts" description="This week's shifts, from Teambridge.">
+      <AppBanner kind="greeting" name={firstName} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
@@ -316,7 +314,7 @@ export default async function Home({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </AppPage>
   );
 }
 

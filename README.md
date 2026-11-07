@@ -12,7 +12,29 @@ Deploy it to Vercel with the button that fits the app (see [Deployment](#deploym
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
-## Getting Started
+## Alloy app shell (`samples/*` branches)
+
+The `samples/alloy-shell` branch, and the sample apps built on it, use **Alloy**
+(`@teamzira/alloy`, the Teambridge design system) and a standard app shell instead of the shadcn
+copy below. Layout rules live in the `teambridge-app-shell` skill
+(`.claude/skills/teambridge-app-shell/`); the nav style, sections and accent colour in
+`app/app-config.ts`.
+
+Alloy is published privately to GitHub Packages, so installs need **`NPM_TOKEN`**, a GitHub token
+with `read:packages` for the `teamzira` org, in the environment (`.npmrc` reads it). Set it locally
+before `yarn install`, and in the Vercel project's environment variables alongside the four app
+secrets.
+
+| Branch | App | Nav |
+| --- | --- | --- |
+| `samples/timesheet` | Timesheet | none: one page |
+| `samples/client-portal` | Client portal | tabs |
+| `samples/scheduling` | Scheduling | sidebar with a folder, a full-width calendar page and a side panel |
+
+To put a sample on an account: create the app in Teambridge (Settings → Internal → App
+Management) as single-account for that account, deploy its branch to Vercel with the app's client
+ID, client secret, webhook secret, slug and `NPM_TOKEN`, then install it from the App Library.
+
 
 ### 1. Clone and Install
 
