@@ -7,28 +7,32 @@ import { LocationFilter } from './location-filter';
 import { NewJobOrder } from './new-job-order';
 
 type Props = {
+  title: string;
+  description: string;
   data: JobOrdersData;
+  /** Only the Job orders page carries New job order, the app's one primary action. */
+  canCreate?: boolean;
   children: ReactNode;
 };
 
 /**
- * The title block both tabs share, so switching tabs changes only the content: the location
- * filter, then New job order, the page's one primary action (it carries the account's colour).
+ * A sidebar section's page: its own title, the location filter, and on Job orders the app's one
+ * primary action, New job order (it carries the account's colour). An error replaces the body.
  */
-export function JobsPage({ data, children }: Props) {
+export function JobsPage({ title, description, data, canCreate = false, children }: Props) {
   return (
     <AppPage
-      title="Job orders"
-      description="Roles you've asked us to fill, and who's been placed."
+      title={title}
+      description={description}
       actions={
         <>
           {data.locations.length > 1 && <LocationFilter locations={data.locations} locationId={data.locationId} />}
-          {data.status === 'ok' && <NewJobOrder locations={data.locations} roles={data.roles} />}
+          {canCreate && data.status === 'ok' && <NewJobOrder locations={data.locations} roles={data.roles} />}
         </>
       }
     >
       {data.status === 'error' ? (
-        <AlloyAlert variant="error" title="Couldn't load job orders">
+        <AlloyAlert variant="error" title={`Couldn't load ${title.toLowerCase()}`}>
           {data.message}
         </AlloyAlert>
       ) : (

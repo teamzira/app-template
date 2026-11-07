@@ -23,6 +23,7 @@ export interface Placement {
   id: string;
   jobName: string | null;
   locationName: string | null;
+  workerId: string | null;
   workerName: string | null;
   start: string | null;
   stage: string | null;

@@ -8,10 +8,10 @@ type Props = { searchParams: Promise<{ location?: string }> };
 export default async function PlacementsPage({ searchParams }: Props) {
   const data = await loadJobOrders((await searchParams).location);
   return (
-    <JobsPage data={data}>
+    <JobsPage title="Placements" description="Everyone put forward for your job orders, and where they are." data={data}>
       {data.status === 'ok' && (
         <section className="alloy-chart-card flex flex-col gap-3">
-          <AlloySectionHeader title="Placements" subtitle="On the job orders above, soonest start first" size="m" />
+          <AlloySectionHeader title="All placements" subtitle="Soonest start first" size="m" />
           <PlacementsTable placements={data.placements} />
         </section>
       )}

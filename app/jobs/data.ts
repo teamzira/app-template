@@ -111,6 +111,7 @@ export async function loadJobOrders(location: string | undefined): Promise<JobOr
         id: record.id,
         jobName: jobRecord ? readText(jobRecord[name.id]) : null,
         locationName: jobRecord ? (locationNames.get(readIds(jobRecord[locationField.id])[0] ?? '') ?? null) : null,
+        workerId: workerId ?? null,
         workerName: workerId ? (workerNames.get(workerId) ?? null) : null,
         start: jobRecord ? readText(jobRecord[start.id]) : null,
         stage: stage ? readText(record[stage.id]) : null,

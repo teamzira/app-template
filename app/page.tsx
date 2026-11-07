@@ -9,11 +9,12 @@ type Props = { searchParams: Promise<{ location?: string }> };
 
 // "Starting soon" looks this far ahead.
 const SOON_DAYS = 14;
+const TITLE = { title: 'Job orders', description: "Roles you've asked us to fill, and who's been placed." };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default async function JobOrdersPage({ searchParams }: Props) {
   const data = await loadJobOrders((await searchParams).location);
-  if (data.status !== 'ok') return <JobsPage data={data}>{null}</JobsPage>;
+  if (data.status !== 'ok') return <JobsPage {...TITLE} data={data} canCreate>{null}</JobsPage>;
 
   const open = data.jobs.filter((job) => isOpenJob(job.status));
   // From a day back, so a job order starting today (stored at that day's midnight) still counts.
@@ -25,7 +26,7 @@ export default async function JobOrdersPage({ searchParams }: Props) {
   const others = data.jobs.filter((job) => !isOpenJob(job.status));
 
   return (
-    <JobsPage data={data}>
+    <JobsPage {...TITLE} data={data} canCreate>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <AlloyStatCard title="Open job orders" value={open.length} />
         <AlloyStatCard
