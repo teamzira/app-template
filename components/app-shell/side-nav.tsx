@@ -75,7 +75,8 @@ export function AppSideNav({ items, settings }: Props) {
     <AlloySecondaryNav
       title="App sections"
       headerClassName="hidden"
-      className="pt-2"
+      // `app-side-nav` is the hook accent.css tints the selected row from.
+      className="app-side-nav pt-2"
       bottomItems={settings ? renderSection(settings) : undefined}
     >
       {items.map((item) => (isFolder(item) ? renderFolder(item) : renderSection(item)))}
