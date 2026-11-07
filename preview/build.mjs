@@ -102,7 +102,7 @@ function previewPlugin(sampleDir, name) {
   };
 }
 
-async function bundle(name, sampleDir) {
+async function bundle({ name, label }, sampleDir) {
   const result = await esbuild.build({
     entryPoints: [path.join(previewDir, 'entry.tsx')],
     bundle: true,
@@ -114,7 +114,7 @@ async function bundle(name, sampleDir) {
     jsx: 'automatic',
     minify: true,
     legalComments: 'none',
-    define: { __PREVIEW_APP__: JSON.stringify(name), 'process.env.NODE_ENV': '"production"' },
+    define: { __PREVIEW_APP__: JSON.stringify(name), __PREVIEW_LABEL__: JSON.stringify(label), 'process.env.NODE_ENV': '"production"' },
     loader: { '.svg': 'dataurl' },
     plugins: [previewPlugin(sampleDir, name)],
     logLevel: 'warning',
@@ -143,7 +143,7 @@ async function main() {
   for (const sample of SAMPLES) {
     const dir = checkout(sample.name);
     console.log(`Bundling ${sample.label} from ${branchRef(sample.name)}`);
-    built.push({ ...sample, dir, ...(await bundle(sample.name, dir)) });
+    built.push({ ...sample, dir, ...(await bundle(sample, dir)) });
   }
   const css = [await tailwindCss(built.map((b) => b.dir)), ...built.map((b) => b.css)].join('\n');
 

@@ -46,6 +46,7 @@
   .preview-note strong { color: var(--frame-ink); font-weight: 500; }
   .preview-stage { height: calc(100dvh - var(--bar-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   .preview-stage > div { height: 100%; }
+  /* Teambridge's header sits on white above the app, which starts its own page below it. */
   /* The shell fills the iframe in Teambridge (h-dvh); here it fills the space under the bar. */
   .preview-stage .h-dvh { height: 100%; }
   .preview-toast {
@@ -120,8 +121,8 @@
     history.replaceState = function (_state, _title, url) { route(url); };
     history.pushState = function (_state, _title, url) { route(url); };
 
-    window.addEventListener('preview:open-record', function () {
-      toast.textContent = 'In Teambridge, this opens the record in its own detail panel.';
+    window.addEventListener('preview:note', function (event) {
+      toast.textContent = event.detail;
       toast.hidden = false;
       clearTimeout(toastTimer);
       toastTimer = setTimeout(function () { toast.hidden = true; }, 2800);

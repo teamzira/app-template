@@ -4,8 +4,10 @@
  */
 export function useOpenRecord() {
   return {
-    openRecord: (recordId: string) => {
-      window.dispatchEvent(new CustomEvent('preview:open-record', { detail: recordId }));
+    openRecord: (_recordId: string) => {
+      window.dispatchEvent(
+        new CustomEvent('preview:note', { detail: 'In Teambridge, this opens the record in its own detail panel.' })
+      );
     },
   };
 }
