@@ -36,9 +36,11 @@
   background-color: color-mix(in srgb, var(--app-accent) 16%, white);
 }
 
+/* Shaded 15% toward black: pink at full strength is 4.4:1 on its own wash; this keeps every
+   accent above 5:1 at rest and on hover while still reading as the brand colour. */
 .app-shell-accent .app-side-nav [data-selected="true"],
 .app-shell-accent .app-side-nav [data-selected="true"] * {
-  color: var(--app-accent);
+  color: color-mix(in srgb, var(--app-accent) 85%, black);
 }
 
 .app-shell-accent [data-alloy-tabs-indicator] {
