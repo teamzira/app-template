@@ -26,6 +26,21 @@
   filter: brightness(0.84);
 }
 
+/* The sidebar's selected row: a wash of the accent behind the label and icon in it, in place of
+   Alloy's grey. Hover darkens the wash a step, as Alloy's selected hover does. */
+.app-shell-accent .app-side-nav [data-selected="true"] {
+  background-color: color-mix(in srgb, var(--app-accent) 10%, white);
+}
+
+.app-shell-accent .app-side-nav [data-selected="true"]:hover {
+  background-color: color-mix(in srgb, var(--app-accent) 16%, white);
+}
+
+.app-shell-accent .app-side-nav [data-selected="true"],
+.app-shell-accent .app-side-nav [data-selected="true"] * {
+  color: var(--app-accent);
+}
+
 .app-shell-accent [data-alloy-tabs-indicator] {
   background-color: var(--app-accent);
 }
