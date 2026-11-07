@@ -8,7 +8,7 @@ import { AppSideNav } from './side-nav';
 import { AppTabNav } from './tab-nav';
 import { AppTabsProvider } from './tabs-context';
 import type { AppSection } from './types';
-import { ACCENT_VAR_CLASSES, flattenSections } from './utils';
+import { flattenSections, getAccentClasses } from './utils';
 import './accent.css';
 
 type Props = {
@@ -29,10 +29,7 @@ const SETTINGS: AppSection = { href: '/setup/', label: 'Settings', icon: Setting
 // component (the layout) can't hand to a client one.
 export function AppShell({ showSettings, children }: Props) {
   const config = appConfig;
-  const accent = config.accent ?? 'default';
-  // `--app-accent` is always set, so links can use `text-(--app-accent)`; the override of
-  // Alloy's fills only switches on for a non-default accent.
-  const accentClasses = cn(ACCENT_VAR_CLASSES[accent], accent !== 'default' && 'app-shell-accent');
+  const accentClasses = getAccentClasses(config.accent);
   const settings = showSettings ? SETTINGS : undefined;
 
   if (config.navStyle === 'sidebar') {
