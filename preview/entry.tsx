@@ -5,7 +5,6 @@
  */
 import { startTransition, Suspense, use, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { appConfig } from '@/app/app-config';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { currentLocation, subscribeToLocation } from 'next/navigation';
 import { routes } from 'preview-app-routes';
@@ -46,19 +45,7 @@ function PreviewApp() {
     </Suspense>
   );
 
-  // As in the prototype: a sidebar runs the full height and the header heads the right column;
-  // tabs and one-page apps keep the header across the full width.
-  if (appConfig.navStyle === 'sidebar') {
-    return (
-      <AppShell showSettings={false}>
-        <div className="flex h-full flex-col">
-          <HostHeader appName={__PREVIEW_LABEL__} />
-          <div className="min-h-0 flex-1">{page}</div>
-        </div>
-      </AppShell>
-    );
-  }
-
+  // Teambridge's header spans the iframe's full width; the app, its sidebar included, sits below.
   return (
     <div className="flex h-full flex-col">
       <HostHeader appName={__PREVIEW_LABEL__} />
