@@ -44,7 +44,8 @@ const PLACED_STAGES = new Set(['placed', 'hired', 'active', 'started']);
 const ENDED_STAGES = new Set(['rejected', 'withdrawn', 'declined', 'ended', 'cancelled']);
 
 export function jobStatusTag(status: string | null): { label: string; status: TagStatus } {
-  if (!status) return { label: 'No status', status: TagStatus.INACTIVE };
+  // A job order created without a status (as New job order does) is waiting to be worked.
+  if (!status) return { label: 'New', status: TagStatus.PENDING };
   return { label: status, status: JOB_STATUS[status.trim().toLowerCase()] ?? TagStatus.INACTIVE };
 }
 
