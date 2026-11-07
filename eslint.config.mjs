@@ -25,6 +25,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // The sample-app preview builds against each sample's checkout, not this one (preview/build.mjs).
+    "preview/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

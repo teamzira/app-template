@@ -32,6 +32,13 @@ secrets. A few Alloy components (stat cards, segmented controls) import SCSS, wh
 | `samples/client-portal` | Client portal | tabs |
 | `samples/scheduling` | Scheduling | sidebar with a folder, a full-width calendar page and a side panel |
 
+**Preview without an account.** The `samples/preview` branch builds all three into one static
+page that runs in the browser on sample rows: `yarn preview:build` writes
+`preview/dist/index.html`. It checks out each sample's branch into `preview/.work/` and bundles the
+sample's own shell, pages and loaders; only Next's router, the Teambridge client (it serves
+`preview/fixtures.ts`) and the host's record panel are stand-ins. Rebuild it after a sample
+changes.
+
 To put a sample on an account: create the app in Teambridge (Settings → Internal → App
 Management) as single-account for that account, deploy its branch to Vercel with the app's client
 ID, client secret, webhook secret, slug and `NPM_TOKEN`, then install it from the App Library.

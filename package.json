@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "preview:build": "node preview/build.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.10",
@@ -33,8 +34,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.25.10",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
+    "postcss": "^8.4.31",
     "sass": "^1.108.1",
     "tailwindcss": "^4",
     "typescript": "6.0.3"

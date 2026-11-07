@@ -1,0 +1,134 @@
+<title>Teambridge Sample Apps</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* PREVIEW_CSS */
+</style>
+<style>
+  /* The apps are drawn in Alloy, which is light only, so the frame around them commits to light too.
+     Layout: one slim bar to switch sample, then the sample filling the rest of the screen. */
+  :root {
+    --font-geist-sans: 'Geist';
+    --font-geist-mono: 'Geist Mono';
+    --frame-bg: #ffffff;
+    --frame-bar: #f6f7f9;
+    --frame-line: #e3e6eb;
+    --frame-ink: #111418;
+    --frame-muted: #5b6472;
+    --frame-chip: #ffffff;
+    --bar-h: 56px;
+    color-scheme: light;
+  }
+  html, body { height: 100%; }
+  body { background: var(--frame-bg); color: var(--frame-ink); margin: 0; }
+  .preview-bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    min-height: var(--bar-h); box-sizing: border-box;
+    padding-block: 8px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: var(--frame-bar); border-bottom: 1px solid var(--frame-line);
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--frame-bar); }
+  .preview-name { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .preview-switch { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: var(--frame-line); }
+  .preview-switch button {
+    font: inherit; font-size: 13px; font-weight: 500; color: var(--frame-muted);
+    border: 0; border-radius: 7px; padding: 6px 12px; background: transparent; cursor: pointer; white-space: nowrap;
+  }
+  .preview-switch button[aria-pressed="true"] { background: var(--frame-chip); color: var(--frame-ink); box-shadow: 0 1px 2px rgb(17 20 24 / 0.08); }
+  .preview-switch button:focus-visible { outline: 2px solid var(--frame-ink); outline-offset: 1px; }
+  .preview-note { margin-left: auto; font-size: 12px; color: var(--frame-muted); }
+  .preview-note strong { color: var(--frame-ink); font-weight: 500; }
+  .preview-stage { height: calc(100dvh - var(--bar-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .preview-stage > div { height: 100%; }
+  /* The shell fills the iframe in Teambridge (h-dvh); here it fills the space under the bar. */
+  .preview-stage .h-dvh { height: 100%; }
+  .preview-toast {
+    position: fixed; z-index: 30; left: 50%; transform: translateX(-50%);
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 32px); box-sizing: border-box;
+    padding: 10px 14px; border-radius: 10px; background: var(--frame-ink); color: var(--frame-bg);
+    font: 500 13px/1.4 'Geist', ui-sans-serif, system-ui, sans-serif;
+  }
+  @media (max-width: 720px) {
+    .preview-note { display: none; }
+    .preview-name { display: none; }
+    .preview-switch { width: 100%; }
+    .preview-switch button { flex: 1; padding-inline: 6px; }
+    :root { --bar-h: 52px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .preview-switch button { transition: background-color 120ms, color 120ms; }
+  }
+</style>
+
+<header class="preview-bar">
+  <span class="preview-name">Teambridge sample apps</span>
+  <div class="preview-switch" role="group" aria-label="Sample app" id="switch"></div>
+  <span class="preview-note" id="note"></span>
+</header>
+<div class="preview-stage" id="stage"></div>
+<div class="preview-toast" id="toast" role="status" hidden></div>
+
+<script>
+  (function () {
+    var samples = /* PREVIEW_SAMPLES */;
+    var stage = document.getElementById('stage');
+    var switcher = document.getElementById('switch');
+    var note = document.getElementById('note');
+    var toast = document.getElementById('toast');
+    var active = samples[0].name;
+    var toastTimer;
+
+    samples.forEach(function (sample) {
+      var mount = document.createElement('div');
+      mount.id = 'app-' + sample.name;
+      mount.hidden = true;
+      stage.appendChild(mount);
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = sample.label;
+      button.dataset.name = sample.name;
+      button.addEventListener('click', function () { show(sample.name, true); });
+      switcher.appendChild(button);
+    });
+
+    function show(name, fromClick) {
+      var sample = samples.find(function (s) { return s.name === name; }) || samples[0];
+      active = sample.name;
+      samples.forEach(function (s) {
+        document.getElementById('app-' + s.name).hidden = s.name !== active;
+      });
+      switcher.querySelectorAll('button').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.name === active));
+      });
+      note.innerHTML = '<strong>' + sample.nav + '</strong> · sample data, nothing reads Teambridge';
+      if (fromClick && location.hash !== '#' + active) location.hash = active;
+    }
+
+    // The samples keep view state in the query with history.replaceState; the page's own URL can't
+    // carry it, so it goes to whichever sample is on screen instead.
+    function route(url) {
+      if (url == null) return;
+      window.dispatchEvent(new CustomEvent('preview:history', { detail: { app: active, url: String(url) } }));
+    }
+    history.replaceState = function (_state, _title, url) { route(url); };
+    history.pushState = function (_state, _title, url) { route(url); };
+
+    window.addEventListener('preview:open-record', function () {
+      toast.textContent = 'In Teambridge, this opens the record in its own detail panel.';
+      toast.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.hidden = true; }, 2800);
+    });
+
+    window.addEventListener('hashchange', function () { show(location.hash.slice(1), false); });
+    show(location.hash.slice(1), false);
+  })();
+</script>
+<!-- PREVIEW_SCRIPTS -->
