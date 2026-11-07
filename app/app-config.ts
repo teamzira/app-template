@@ -1,3 +1,5 @@
+import Briefcase01Icon from '@teamzira/alloy/icons-js/Education/Briefcase01Icon';
+import UserCheck01Icon from '@teamzira/alloy/icons-js/User/UserCheck01Icon';
 import type { AppShellConfig } from '@/components/app-shell/types';
 
 /**
@@ -5,6 +7,10 @@ import type { AppShellConfig } from '@/components/app-shell/types';
  * its sections, and the account's accent colour. See .claude/skills/teambridge-app-shell.
  */
 export const appConfig: AppShellConfig = {
-  navStyle: 'none',
-  accent: 'default',
+  navStyle: 'tabs',
+  accent: 'purple',
+  sections: [
+    { href: '/', label: 'Job orders', icon: Briefcase01Icon },
+    { href: '/placements/', label: 'Placements', icon: UserCheck01Icon },
+  ],
 };
