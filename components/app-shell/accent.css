@@ -2,19 +2,27 @@
    to the shell and only to the plain primary button and the selected tab's underline. AlloyButton
    fills a plain primary with `bg-alloy-mono-1000`; a semantic `accent` (destructive red,
    affirmative green) carries its hue's class instead, so it keeps its meaning and contrast.
-   Disabled buttons keep Alloy's grey; hover and press darken the accent. */
+   The exclusions mirror Alloy's grey-out (alloy.css): a disabled button greys, but a loading one
+   is also :disabled and keeps its fill, and an aria-disabled one keeps its colour, so both keep
+   the accent. Hover and press darken only a button that can be used. */
 .app-shell-accent
-  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]) {
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
+    [data-disabled]:not([data-loading])
+  ) {
   background-color: var(--app-accent);
 }
 
 .app-shell-accent
-  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]):hover {
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([data-disabled]):not(
+    [aria-disabled="true"]
+  ):hover {
   filter: brightness(0.92);
 }
 
 .app-shell-accent
-  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([aria-disabled="true"]):active {
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled):not([data-disabled]):not(
+    [aria-disabled="true"]
+  ):active {
   filter: brightness(0.84);
 }
 
