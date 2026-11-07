@@ -5,7 +5,7 @@ export interface Candidate {
   name: string;
   jobNames: string[];
   locations: string[];
-  /** The stage of their placement starting soonest, as the one worth showing. */
+  /** A placed stage if they're placed anywhere; otherwise the stage of their soonest placement. */
   stage: string | null;
   isPlaced: boolean;
 }
@@ -22,18 +22,21 @@ export function summarizeCandidates(placements: Placement[]): Candidate[] {
       name: placement.workerName ?? 'Unnamed candidate',
       jobNames: [],
       locations: [],
-      stage: placement.stage,
+      stage: null,
       isPlaced: false,
     };
     if (placement.jobName && !candidate.jobNames.includes(placement.jobName)) candidate.jobNames.push(placement.jobName);
     if (placement.locationName && !candidate.locations.includes(placement.locationName)) {
       candidate.locations.push(placement.locationName);
     }
-    if (start < (soonestStart.get(placement.workerId) ?? Number.POSITIVE_INFINITY)) {
+    if (isPlaced(placement.stage)) {
+      // Placed anywhere is the status that matters, whatever their other placements say.
+      if (!candidate.isPlaced) candidate.stage = placement.stage;
+      candidate.isPlaced = true;
+    } else if (!candidate.isPlaced && start < (soonestStart.get(placement.workerId) ?? Number.POSITIVE_INFINITY)) {
       soonestStart.set(placement.workerId, start);
       candidate.stage = placement.stage;
     }
-    candidate.isPlaced ||= isPlaced(placement.stage);
     byWorker.set(placement.workerId, candidate);
   }
   return [...byWorker.values()].sort((a, b) => Number(b.isPlaced) - Number(a.isPlaced) || a.name.localeCompare(b.name));
