@@ -35,6 +35,13 @@ export const ACCENT_VAR_CLASSES: Record<AppAccent, string> = {
   green: '[--app-accent:var(--color-alloy-green-700)]',
 };
 
+/**
+ * `--app-accent` is always set, so links can use `text-(--app-accent)`; the override of Alloy's
+ * fills (accent.css) only switches on for a non-default accent.
+ */
+export const getAccentClasses = (accent: AppAccent = 'default'): string =>
+  accent === 'default' ? ACCENT_VAR_CLASSES.default : `${ACCENT_VAR_CLASSES[accent]} app-shell-accent`;
+
 export type GreetingPart = 'morning' | 'afternoon' | 'evening';
 
 /** Morning from 5am, afternoon from noon, evening from 5pm through the night. */
