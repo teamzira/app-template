@@ -1,3 +1,6 @@
+import CalendarIcon from '@teamzira/alloy/icons-js/Time/CalendarIcon';
+import Home02Icon from '@teamzira/alloy/icons-js/General/Home02Icon';
+import Users01Icon from '@teamzira/alloy/icons-js/User/Users01Icon';
 import type { AppShellConfig } from '@/components/app-shell/types';
 
 /**
@@ -5,6 +8,11 @@ import type { AppShellConfig } from '@/components/app-shell/types';
  * its sections, and the account's accent colour. See .claude/skills/teambridge-app-shell.
  */
 export const appConfig: AppShellConfig = {
-  navStyle: 'none',
-  accent: 'default',
+  navStyle: 'tabs',
+  accent: 'azure',
+  sections: [
+    { href: '/', label: 'Overview', icon: Home02Icon },
+    { href: '/schedule/', label: 'Schedule', icon: CalendarIcon },
+    { href: '/staff/', label: 'Staff', icon: Users01Icon },
+  ],
 };
