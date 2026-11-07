@@ -32,8 +32,8 @@ const DOT = {
  */
 export function CalendarMonth({ weeks, month, todayKey, selectedKey, shiftsByDay, onSelectDay, onOpenShift }: Props) {
   return (
-    <div className="overflow-hidden rounded-xl border border-alloy-slate-200">
-      <div className="grid grid-cols-7 border-b border-alloy-slate-200 bg-alloy-slate-50">
+    <div className="overflow-hidden rounded-xl border border-[color:var(--color-border-opaque)]">
+      <div className="grid grid-cols-7 border-b border-[color:var(--color-border-opaque)] bg-alloy-slate-50">
         {WEEKDAYS.map((day) => (
           <div key={day} className="alloy-label-s px-2 py-2 text-alloy-slate-500">
             {day}
@@ -41,7 +41,7 @@ export function CalendarMonth({ weeks, month, todayKey, selectedKey, shiftsByDay
         ))}
       </div>
       {weeks.map((week) => (
-        <div key={toDayKey(week[0])} className="grid grid-cols-7 border-b border-alloy-slate-200 last:border-b-0">
+        <div key={toDayKey(week[0])} className="grid grid-cols-7 border-b border-[color:var(--color-border-opaque)] last:border-b-0">
           {week.map((date) => {
             const key = toDayKey(date);
             const shifts = shiftsByDay.get(key) ?? [];
@@ -53,7 +53,7 @@ export function CalendarMonth({ weeks, month, todayKey, selectedKey, shiftsByDay
               <div
                 key={key}
                 className={cn(
-                  'flex min-h-16 min-w-0 flex-col gap-1 border-r border-alloy-slate-200 p-1 last:border-r-0 sm:min-h-28 sm:p-1.5',
+                  'flex min-h-16 min-w-0 flex-col gap-1 border-r border-[color:var(--color-border-opaque)] p-1 last:border-r-0 sm:min-h-28 sm:p-1.5',
                   isOtherMonth && 'bg-alloy-slate-50',
                   isSelected && 'ring-2 ring-inset ring-alloy-mono-1000'
                 )}
@@ -89,7 +89,7 @@ export function CalendarMonth({ weeks, month, todayKey, selectedKey, shiftsByDay
                       type="button"
                       onClick={() => onOpenShift(shift.id)}
                       title={`${timeFormat.format(new Date(shift.start))} · ${shift.assigneeId ? (shift.assigneeName ?? 'Unnamed') : 'Open'}`}
-                      className="alloy-caption-m flex min-w-0 items-center gap-1.5 rounded-md border border-alloy-slate-200 bg-white px-1.5 py-0.5 text-left hover:border-alloy-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue-500"
+                      className="alloy-caption-m flex min-w-0 items-center gap-1.5 rounded-md border border-[color:var(--color-border-opaque)] bg-white px-1.5 py-0.5 text-left hover:border-[color:var(--color-border-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue-500"
                     >
                       <span className={cn('size-1.5 shrink-0 rounded-full', shift.assigneeId ? DOT.filled : DOT.open)} />
                       <span className="hidden shrink-0 text-alloy-slate-500 2xl:inline">{timeFormat.format(new Date(shift.start))}</span>
