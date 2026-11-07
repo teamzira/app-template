@@ -36,7 +36,8 @@ working examples.
 **Colour means status, and status comes only from `AlloyStatusTag`.** Map every state to a
 `TagStatus` once and reuse it: `NEGATIVE` for overdue or failed, `WARNING` for at risk, `PENDING`
 for in progress, `INACTIVE` for not started, `POSITIVE` for done. Categories, teams and locations
-stay grey. The account accent appears only on primary buttons, the selected tab and links.
+stay grey. The account accent appears only on primary buttons, the selected tab or sidebar row,
+and links.
 
 **One card.** `alloy-chart-card` is the only card: hairline border, 12px corner, 20px padding, white.
 No shadows, gradients, tinted backgrounds or coloured edges. Cards don't nest. A list is one card
