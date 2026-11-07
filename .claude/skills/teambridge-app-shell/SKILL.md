@@ -11,6 +11,20 @@ looked alike. This skill fixes what every app shares and leaves one choice open:
 Code: `components/app-shell/`. Config: `app/app-config.ts`. Run it with `yarn dev` (dev mode, see
 the README); the layout works without the host, but the record panel and URL sync need it.
 
+## Starting a new app
+
+Apps start from the `samples/alloy-shell` branch of `teamzira/app-template`: the template with
+Alloy and this shell in place. If the project has no `components/app-shell/`, it isn't on that
+branch; say so before building anything, rather than drawing a shell by hand.
+
+1. Create the app's repository from `teamzira/app-template` and start from `samples/alloy-shell`.
+2. Set `NPM_TOKEN` (a GitHub token with `read:packages` for `teamzira`) before `yarn install`:
+   Alloy is a private package. Never ask for the token in chat.
+3. Replace the demo page and `app/schema.ts` with the app's own (see `AGENTS.md`), then set the
+   nav, sections and accent in `app/app-config.ts`.
+
+The sample apps on the other `samples/*` branches are working examples of each nav and accent.
+
 ## Alloy is the default
 
 Every element the app draws is an Alloy component (`@teamzira/alloy`), styled with Alloy tokens
