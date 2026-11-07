@@ -128,9 +128,10 @@ site); ask if it isn't clear.
 | `orange`  | orange-700              | 5.6:1               |
 | `green`   | green-700               | 6.9:1               |
 
-- It recolours only **primary `AlloyButton`s** and the **selected tab's underline**. Buttons with a
-  semantic `accent` (`destructive`, `affirmative`) keep their own colour; disabled ones stay grey.
-  Alloy dialogs and menus portalled outside the shell keep Alloy black.
+- It recolours only **primary `AlloyButton`s** (dialogs and menus included), the **selected tab's
+  underline** and the **selected sidebar row** (a light wash with the label in the accent).
+  Buttons with a semantic `accent` (`destructive`, `affirmative`) keep their own colour; disabled
+  ones stay grey.
 - **Links** use the same colour with `text-(--app-accent)`.
 - Never use the accent for backgrounds, stripes, gradients or headings. No exact brand hex;
   yellow and matcha brands use `default`.
