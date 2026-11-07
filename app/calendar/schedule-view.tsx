@@ -113,16 +113,14 @@ export function ScheduleView({ year, month, locations, locationId, notice, shift
         <>
           {notice}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-            <AlloyStatCard variant="elevated" title="Shifts" subtitle={label} value={monthShifts.length} />
+            <AlloyStatCard title="Shifts" subtitle={label} value={monthShifts.length} />
             <AlloyStatCard
-              variant="elevated"
               title="Open shifts"
               subtitle={label}
               value={open}
               accent={open > 0 ? 'orange' : 'slate'}
             />
             <AlloyStatCard
-              variant="elevated"
               title="Filled"
               subtitle={label}
               value={filledPct === null ? '—' : `${filledPct}%`}
