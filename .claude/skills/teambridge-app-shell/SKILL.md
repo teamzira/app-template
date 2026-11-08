@@ -1,6 +1,6 @@
 ---
 name: teambridge-app-shell
-description: Lay out a Teambridge app built from this template with the standard shell — a sidebar, tab or no nav chosen in app/app-config.ts, the account's accent colour, one page frame (AppPage) with the same width, gutter and title everywhere, one optional banner and side panel, and Alloy components for everything inside. Use when building or restyling any page of this app, choosing sidebar, tabs or no nav, setting the account colour, building a calendar or schedule page, or when asked to make the app "look consistent", "use the same padding/title" or "use Alloy".
+description: Lay out a Teambridge app built from this template with the standard shell — a sidebar, tab or no nav chosen in app/app-config.ts, the account's accent colour or a branded band, one page frame (AppPage) with the same width, gutter and title everywhere, one optional banner and side panel, and Alloy components for everything inside. Use when building or restyling any page of this app, choosing sidebar, tabs or no nav, setting the account colour or brand, building a calendar or schedule page, or when asked to make the app "look consistent", "use the same padding/title" or "use Alloy".
 ---
 
 # Teambridge app shell
@@ -151,6 +151,32 @@ site); ask if it isn't clear.
 - Never use the accent for backgrounds, stripes, gradients or headings. No exact brand hex;
   yellow and matcha brands use `default`.
 
+## Branded apps
+
+Most apps take an `accent`. Use `brand` instead only when the user asks for a branded app: one an
+account's own staff or clients open, where it should look like the company rather than Teambridge.
+
+```ts
+export const appConfig: AppShellConfig = {
+  navStyle: 'sidebar',
+  brand: { name: 'TAG MedStaffing', color: '#0f7aa0' },
+  sections: [/* … */],
+};
+```
+
+- `name` is the company's name as its own site writes it. `color` is its main brand colour, the
+  exact hex from its site, brand guide or a screenshot (its main button or headings, not the
+  logo's lightest tint); ask if it isn't clear. `accent` is ignored.
+- The shell does the rest: each page's title sits in a full-width **band** in the brand colour,
+  fading to a deeper shade of it, with the company name above the title; the page behind the
+  content takes a **light wash** of the colour, cards stay white; primary buttons, tabs and the
+  selected sidebar row take the colour; on the band, the primary button turns over (white fill,
+  brand text). Text on the band is white or near-black, whichever reads better on the colour.
+- The company name is text only: still no logo, and no other branding anywhere else on the page.
+  Everything below the band follows the same rules as any other app.
+- A preview or demo for a company that isn't the account using it is labelled as a concept on
+  sample data.
+
 ## Page rules
 
 - **Every page is one `AppPage`.** No padding, max width or background around it or inside its root.
@@ -190,7 +216,8 @@ One optional `AppBanner`, the first block of the landing page, above the stat ro
 | Side panel        | `AppPage` `panel` only                                                               |
 | Content           | The Alloy blocks in [components.md](components.md)                                   |
 
-**Banned, wherever it would go:** a header, logo, account or app name, user card or "Powered by"
+**Banned, wherever it would go** (a branded app's band is the one exception, above): a header,
+logo, account or app name, user card or "Powered by"
 line inside the app; "MENU" labels or plain group headings in the sidebar (use a folder); icon
 tiles or emoji beside the title; badges or dates beside the description; eyebrows, stripes,
 gradients, tinted cards, shadows, illustrations or background images; any banner but `AppBanner`;
