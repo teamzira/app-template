@@ -56,8 +56,9 @@ chevron is the only "go" signal.
 - The list reaches the card's sides and bottom: a row's hover and divider span the card's full
   width, and the card has no padding under the last row. The list's bottom corners follow the
   card's, so the last row's hover doesn't square them off.
-- The row's content keeps the card's 20px gutter, so avatars and labels line up with the card's
-  title.
+- The row's content keeps the card's 20px gutter: the leading avatar or icon's left edge lines up
+  with the card's title. (`cardRow` shrinks Alloy's leading slot, which otherwise centres a 32px
+  avatar in a 36–48px box.)
 - The last row has no divider (`divider={index < rows.length - 1}`): the card's border is its edge.
 - An empty list is one line of `text-alloy-slate-500` in the card's normal padding, not an empty
   `CardList`.
