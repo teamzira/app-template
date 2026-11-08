@@ -84,16 +84,14 @@ export function AppPage({ title, description, actions, width = 'standard', panel
   const frame = cn('mx-auto flex w-full flex-col gap-5 px-4 sm:px-10', WIDTH_CLASSES[width]);
 
   if (brand) {
-    // The band runs the iframe's full width; its title and the content below stay on one column.
+    // The band is a card on the content column, so it keeps the page's width and gutter.
     return (
       <div className="app-page h-full overflow-y-auto">
-        <div className="app-brand-band">
-          <div className={cn(frame, 'gap-1 pt-6 pb-6 sm:pt-8')}>
+        <div className={cn(frame, 'py-4 sm:py-10')}>
+          <div className="app-brand-band flex flex-col gap-1 rounded-xl p-5 sm:p-8">
             <p className="alloy-label-s app-brand-name">{brand.name}</p>
             {header}
           </div>
-        </div>
-        <div className={cn(frame, 'pt-5 pb-4 sm:pb-10')}>
           {tabRow}
           {body}
         </div>
