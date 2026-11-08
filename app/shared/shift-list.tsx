@@ -5,6 +5,7 @@ import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
 import { TagStatus } from '@teamzira/alloy/components/tags/interface';
 import AlloyStatusTag from '@teamzira/alloy/components/tags/AlloyStatusTag';
 import UserPlus01Icon from '@teamzira/alloy/icons-js/User/UserPlus01Icon';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import type { Shift } from './types';
 import { dayFormat, formatTimeRange, useIsBrowser } from './use-is-browser';
@@ -26,7 +27,7 @@ export function ShiftList({ shifts, emptyText, size = 'large' }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {shifts.map((shift, index) => {
         const isOpen = !shift.assigneeId;
         const title = isOpen ? (shift.roleName ?? 'Open shift') : (shift.assigneeName ?? 'Unnamed worker');
@@ -39,6 +40,7 @@ export function ShiftList({ shifts, emptyText, size = 'large' }: Props) {
           <li key={shift.id}>
             <AlloyListItem
               size={size}
+              {...cardRow(size)}
               label={title}
               description={details.join(' · ') || ' '}
               leadingSlot={
@@ -64,6 +66,6 @@ export function ShiftList({ shifts, emptyText, size = 'large' }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }

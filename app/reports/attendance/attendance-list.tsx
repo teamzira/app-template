@@ -3,6 +3,7 @@
 import AlloyAvatar from '@teamzira/alloy/components/avatar/AlloyAvatar';
 import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
 import AlloyStatusTag from '@teamzira/alloy/components/tags/AlloyStatusTag';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import type { Shift } from '../../shared/types';
 import { dayFormat, timeFormat, useIsBrowser } from '../../shared/use-is-browser';
@@ -28,7 +29,7 @@ export function AttendanceList({ shifts, emptyText }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {shifts.map((shift, index) => {
         const flag = FLAG_STATUS[getFlag(shift)];
         const name = shift.assigneeName ?? 'Unnamed worker';
@@ -36,6 +37,7 @@ export function AttendanceList({ shifts, emptyText }: Props) {
           <li key={shift.id}>
             <AlloyListItem
               size="large"
+              {...cardRow()}
               label={name}
               description={hasTimes ? describe(shift) : ' '}
               leadingSlot={<AlloyAvatar name={shift.assigneeName ?? undefined} size="md" />}
@@ -48,6 +50,6 @@ export function AttendanceList({ shifts, emptyText }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }
