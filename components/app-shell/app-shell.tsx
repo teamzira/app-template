@@ -8,7 +8,7 @@ import { AppSideNav } from './side-nav';
 import { AppTabNav } from './tab-nav';
 import { AppTabsProvider } from './tabs-context';
 import type { AppSection } from './types';
-import { flattenSections, getAccentClasses } from './utils';
+import { flattenSections, getShellTheme } from './utils';
 import './accent.css';
 
 type Props = {
@@ -29,13 +29,13 @@ const SETTINGS: AppSection = { href: '/setup/', label: 'Settings', icon: Setting
 // component (the layout) can't hand to a client one.
 export function AppShell({ showSettings, children }: Props) {
   const config = appConfig;
-  const accentClasses = getAccentClasses(config.accent);
+  const theme = getShellTheme(config);
   const settings = showSettings ? SETTINGS : undefined;
 
   if (config.navStyle === 'sidebar') {
     const phoneTabs = [...flattenSections(config.sections), ...(settings ? [settings] : [])];
     return (
-      <div className={cn('flex h-dvh', accentClasses)}>
+      <div className={cn('flex h-dvh', theme.className)} style={theme.style}>
         <div className="hidden h-full shrink-0 sm:flex">
           <AppSideNav items={config.sections} settings={settings} />
         </div>
@@ -52,7 +52,7 @@ export function AppShell({ showSettings, children }: Props) {
     ) : null;
 
   return (
-    <div className={cn('h-dvh', accentClasses)}>
+    <div className={cn('h-dvh', theme.className)} style={theme.style}>
       <AppTabsProvider
         value={{
           tabs,

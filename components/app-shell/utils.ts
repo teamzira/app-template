@@ -1,4 +1,5 @@
-import type { AppAccent, AppFolder, AppNavItem, AppSection } from './types';
+import type { CSSProperties } from 'react';
+import type { AppAccent, AppBrand, AppFolder, AppNavItem, AppSection } from './types';
 
 export const isFolder = (item: AppNavItem): item is AppFolder => 'sections' in item;
 
@@ -41,6 +42,40 @@ export const ACCENT_VAR_CLASSES: Record<AppAccent, string> = {
  */
 export const getAccentClasses = (accent: AppAccent = 'default'): string =>
   accent === 'default' ? ACCENT_VAR_CLASSES.default : `${ACCENT_VAR_CLASSES[accent]} app-shell-accent`;
+
+const luminance = (hex: string): number => {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const contrast = (a: string, b: string): number => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+const INK_LIGHT = '#ffffff';
+const INK_DARK = '#151515';
+
+/** White or Alloy's near-black, whichever reads better on `background`. */
+export const readableInk = (background: string): string =>
+  contrast(background, INK_LIGHT) >= contrast(background, INK_DARK) ? INK_LIGHT : INK_DARK;
+
+/**
+ * The shell's colour classes and variables, for its root and for <body> (where Alloy portals
+ * dialogs). A brand sets `--app-accent` itself, plus `--app-brand` and the ink readable on it.
+ */
+export const getShellTheme = ({ accent, brand }: { accent?: AppAccent; brand?: AppBrand }) => {
+  if (!brand) return { className: getAccentClasses(accent), style: undefined };
+  const style = {
+    '--app-accent': brand.color,
+    '--app-brand': brand.color,
+    '--app-brand-ink': readableInk(brand.color),
+  } as CSSProperties;
+  return { className: 'app-shell-accent app-shell-brand', style };
+};
 
 export type GreetingPart = 'morning' | 'afternoon' | 'evening';
 

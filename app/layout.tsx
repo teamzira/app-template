@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { TBProvider, TBRouter, TBRecordEditWatcher } from '@/lib/teambridge';
 import { settingsEnabled } from '@/lib/teambridge/setup';
 import { AppShell } from '@/components/app-shell/app-shell';
-import { getAccentClasses } from '@/components/app-shell/utils';
+import { getShellTheme } from '@/components/app-shell/utils';
 import { appConfig } from './app-config';
 import './globals.css';
 
@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   description: 'A Teambridge external app',
 };
 
+const shellTheme = getShellTheme(appConfig);
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,7 +34,8 @@ export default function RootLayout({
       {/* The accent goes on <body> as well as the shell: Alloy portals dialogs, menus and popovers
           to <body>, outside the shell, and their primary buttons should carry it too. */}
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased ${getAccentClasses(appConfig.accent)}`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased ${shellTheme.className}`}
+        style={shellTheme.style}
       >
         <TBProvider>
           {/* Keeps the parent Teambridge URL in sync with this iframe. */}
