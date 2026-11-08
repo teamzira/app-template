@@ -60,9 +60,9 @@
   background-color: color-mix(in srgb, var(--app-brand) 6%, white);
 }
 
-/* The band fades from the brand colour to a deeper shade of it (`--app-brand-deep`, away from the
-   ink), the way staffing brands' own sites carry their colour into a hero; the title side stays at
-   full strength. */
+/* The band, a card at the top of the content column, fades from the brand colour to a deeper
+   shade of it (`--app-brand-deep`, away from the ink), the way staffing brands' own sites carry
+   their colour into a hero; the title side stays at full strength. */
 .app-shell-brand .app-brand-band {
   background: linear-gradient(
     100deg,
