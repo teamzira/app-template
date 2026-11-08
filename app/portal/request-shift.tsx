@@ -86,6 +86,7 @@ export function RequestShift({ locations, roles, locationId }: Props) {
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <AlloySelectField
+              size="compact"
               label="Location"
               required
               placeholder="Choose a location"
@@ -94,14 +95,16 @@ export function RequestShift({ locations, roles, locationId }: Props) {
               onChange={(value) => update({ locationId: value })}
             />
             <AlloySelectField
+              size="compact"
               label="Role"
               placeholder="Choose a role"
               options={roles.map((r) => ({ value: r.id, label: r.name }))}
               value={draft.roleId ?? null}
               onChange={(value) => update({ roleId: value })}
             />
-            <AlloyDateTimeField label="Starts" required value={draft.start ?? null} onChange={(start) => update({ start })} />
+            <AlloyDateTimeField size="compact" label="Starts" required value={draft.start ?? null} onChange={(start) => update({ start })} />
             <AlloyDateTimeField
+              size="compact"
               label="Ends"
               required
               value={draft.end ?? null}
