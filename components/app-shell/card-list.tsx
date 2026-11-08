@@ -11,6 +11,15 @@ export function CardList({ children }: { children: ReactNode }) {
   return <ul className="-mx-5 -mb-5 flex flex-col overflow-hidden rounded-b-[11px]">{children}</ul>;
 }
 
-/** The card's gutter in place of the row's own padding, keeping the row tier's vertical padding. */
+/**
+ * The card's gutter in place of the row's own padding, keeping the row tier's vertical padding.
+ * The leading slot shrinks to its avatar or icon, left-aligned: Alloy centres it in a 36–48px box,
+ * which would set it in from the card's title. (AlloyListItem joins classes without merging them,
+ * hence the important modifiers.)
+ */
 export const cardRow = (size: 'medium' | 'large' = 'large') =>
-  ({ padding: 'none', className: size === 'large' ? 'px-5 py-3' : 'px-5 py-2.5' }) as const;
+  ({
+    padding: 'none',
+    className: size === 'large' ? 'px-5 py-3' : 'px-5 py-2.5',
+    leadingSlotClassName: 'min-w-0! justify-start!',
+  }) as const;
