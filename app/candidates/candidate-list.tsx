@@ -3,6 +3,7 @@
 import AlloyAvatar from '@teamzira/alloy/components/avatar/AlloyAvatar';
 import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
 import AlloyStatusTag from '@teamzira/alloy/components/tags/AlloyStatusTag';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import { stageTag } from '../jobs/types';
 import type { Candidate } from './candidates';
@@ -18,7 +19,7 @@ export function CandidateList({ candidates }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {candidates.map((candidate, index) => {
         const tag = stageTag(candidate.stage);
         const jobs =
@@ -27,6 +28,7 @@ export function CandidateList({ candidates }: Props) {
           <li key={candidate.id}>
             <AlloyListItem
               size="large"
+              {...cardRow()}
               label={candidate.name}
               description={[jobs, candidate.locations.join(', ') || null].filter(Boolean).join(' · ') || ' '}
               leadingSlot={<AlloyAvatar name={candidate.name} size="md" />}
@@ -39,6 +41,6 @@ export function CandidateList({ candidates }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }
