@@ -195,6 +195,11 @@ export const appConfig: AppShellConfig = {
   inspector). `{ title, description, children, footer }`; 360px, kept in view on wide screens,
   below the content under 1024px. Not for navigation, filters, stats or help. Usually `width="full"`.
 - **Actions:** buttons for the whole page, primary last, `size="medium"`.
+- **Control height is 36px, everywhere:** every `AlloyButton` is `size="medium"` (in the page
+  header, banners, panels, dialogs and toolbars) and every field (`AlloySelectField`,
+  `AlloyTextField`, `AlloySearchField`, `AlloyDateField`, `AlloyDateTimeField`,
+  `AlloyNumberField`, ...) is `size="compact"`, so a filter and a button side by side line up. A
+  field's default `medium` is 40px; never leave the size off. Icon-only buttons too.
 - **Inside the page, build only from the blocks in [components.md](components.md).**
 - **States:** handle loading (`loading.tsx` with skeletons inside an `AppPage`), errors and empty
   results inside the page; never a blank page. Error copy never says the app can't reach Teambridge.
@@ -205,7 +210,7 @@ One optional `AppBanner`, the first block of the landing page, above the stat ro
 
 ```tsx
 <AppBanner kind="greeting" name={firstName} summary="3 shifts still need someone." />
-<AppBanner kind="announcement" title="Holiday pay changes on December 1" message="Shifts on company holidays pay 1.5x." action={<AlloyButton style="tertiary" size="small" label="View schedule" />} />
+<AppBanner kind="announcement" title="Holiday pay changes on December 1" message="Shifts on company holidays pay 1.5x." action={<AlloyButton style="tertiary" size="medium" label="View schedule" />} />
 ```
 
 - **Greeting:** date and "Good afternoon, {name}", written in the browser's time; `summary` is one

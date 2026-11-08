@@ -84,7 +84,7 @@ variant="error"` with what to do next.
 A month calendar or schedule is a `width="full"` page, usually with a side panel.
 
 - **Filter bar:** the period stepper (‹ Today ›, then the period's label, e.g. "November 2026")
-  first, then `AlloySelectField` filters (location, assignee). The period label lives here, not
+  first, then `AlloySelectField size="compact"` filters (location, assignee). The period label lives here, not
   as the page title or an eyebrow; the title names the tool ("Clinic schedule").
 - **Stats:** one row of `AlloyStatCard`s above the grid, bordered like every other stat row
   (the default, not `elevated`), not tiles squeezed beside the title.
