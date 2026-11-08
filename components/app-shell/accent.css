@@ -52,3 +52,50 @@
 .app-shell-accent .app-tab-nav span[aria-hidden="true"].bg-alloy-mono-1000 {
   background-color: var(--app-accent);
 }
+
+/* Branded apps (`brand` in app-config): the brand colour as a band behind each page's title, a
+   light wash of it behind the content, and its ink (white or near-black, whichever reads) on the
+   band. Alloy colours its header text with its own tokens, so the band overrides them here. */
+.app-shell-brand .app-page {
+  background-color: color-mix(in srgb, var(--app-brand) 5%, white);
+}
+
+.app-shell-brand .app-brand-band {
+  background-color: var(--app-brand);
+  color: var(--app-brand-ink);
+}
+
+.app-shell-brand .app-brand-band h2,
+.app-shell-brand .app-brand-band p {
+  color: var(--app-brand-ink);
+}
+
+.app-shell-brand .app-brand-band .app-brand-name {
+  opacity: 0.8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* On the band the primary button turns over (ink fill, brand text), or it would vanish into it. */
+.app-shell-brand
+  .app-brand-band
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
+    [data-disabled]:not([data-loading])
+  ) {
+  background-color: var(--app-brand-ink);
+  color: var(--app-brand);
+}
+
+.app-shell-brand .app-brand-band button[data-variant="primary"].bg-alloy-mono-1000 * {
+  color: var(--app-brand);
+}
+
+.app-shell-brand .app-brand-band button[data-variant="float"],
+.app-shell-brand .app-brand-band button[data-variant="float"] * {
+  color: var(--app-brand-ink);
+}
+
+/* Cards stay white on the tinted page, so they lift off it. */
+.app-shell-brand .app-page .alloy-chart-card {
+  background-color: white;
+}

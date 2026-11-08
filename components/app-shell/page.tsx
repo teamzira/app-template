@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import AlloyButton from '@teamzira/alloy/components/buttons/AlloyButton';
 import AlloySectionHeader from '@teamzira/alloy/components/sectionHeader/AlloySectionHeader';
 import Settings01Icon from '@teamzira/alloy/icons-js/General/Settings01Icon';
+import { appConfig } from '@/app/app-config';
 import { cn } from '@/lib/utils';
 import { AppPanel, type AppPanelProps } from './panel';
 import { useAppTabs } from './tabs-context';
@@ -51,10 +52,9 @@ export function AppPage({ title, description, actions, width = 'standard', panel
     />
   );
 
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className={cn('mx-auto flex w-full flex-col gap-5 p-4 sm:p-10', WIDTH_CLASSES[width])}>
-        <AlloySectionHeader
+  const brand = appConfig.brand;
+  const header = (
+    <AlloySectionHeader
           title={title}
           subtitle={description}
           actions={
@@ -69,16 +69,43 @@ export function AppPage({ title, description, actions, width = 'standard', panel
           // On a phone the actions go under the title, or a filter and a button squeeze it into a
           // column a word wide.
           className="max-sm:flex-col max-sm:items-stretch"
-        />
-        {tabs && <div className={cn(isPhoneOnly && 'sm:hidden')}>{tabs}</div>}
-        {panel ? (
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-            <div className="flex min-w-0 flex-1 flex-col gap-5">{children}</div>
-            <AppPanel {...panel} />
+    />
+  );
+  const tabRow = tabs && <div className={cn(isPhoneOnly && 'sm:hidden')}>{tabs}</div>;
+  const body = panel ? (
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+      <div className="flex min-w-0 flex-1 flex-col gap-5">{children}</div>
+      <AppPanel {...panel} />
+    </div>
+  ) : (
+    children
+  );
+  const frame = cn('mx-auto flex w-full flex-col gap-5 px-4 sm:px-10', WIDTH_CLASSES[width]);
+
+  if (brand) {
+    // The band runs the iframe's full width; its title and the content below stay on one column.
+    return (
+      <div className="app-page h-full overflow-y-auto">
+        <div className="app-brand-band">
+          <div className={cn(frame, 'gap-1 pt-6 pb-6 sm:pt-8')}>
+            <p className="alloy-label-s app-brand-name">{brand.name}</p>
+            {header}
           </div>
-        ) : (
-          children
-        )}
+        </div>
+        <div className={cn(frame, 'pt-5 pb-4 sm:pb-10')}>
+          {tabRow}
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className={cn(frame, 'py-4 sm:py-10')}>
+        {header}
+        {tabRow}
+        {body}
       </div>
     </div>
   );
