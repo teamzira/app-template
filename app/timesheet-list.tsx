@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import AlloyAvatar from '@teamzira/alloy/components/avatar/AlloyAvatar';
 import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
 import AlloyStatusTag from '@teamzira/alloy/components/tags/AlloyStatusTag';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import { FLAG_STATUS, formatHours, type TimesheetRow } from './timesheet';
 
@@ -38,7 +39,7 @@ export function TimesheetList({ rows, emptyText }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {rows.map((row, index) => {
         const flag = FLAG_STATUS[row.flag];
         const name = row.assigneeName ?? 'Unassigned';
@@ -46,6 +47,7 @@ export function TimesheetList({ rows, emptyText }: Props) {
           <li key={row.id}>
             <AlloyListItem
               size="large"
+              {...cardRow()}
               label={name}
               description={hasTimes ? describe(row) : ' '}
               leadingSlot={<AlloyAvatar name={row.assigneeName ?? undefined} size="md" />}
@@ -67,6 +69,6 @@ export function TimesheetList({ rows, emptyText }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }
