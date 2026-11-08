@@ -57,11 +57,19 @@ const contrast = (a: string, b: string): number => {
 };
 
 const INK_LIGHT = '#ffffff';
-const INK_DARK = '#151515';
+// Pure black rather than Alloy's #151515: with black, one of the two inks reaches 4.58:1 on any
+// colour, so a brand of any hex keeps its button and band text above 4.5:1.
+const INK_DARK = '#000000';
 
-/** White or Alloy's near-black, whichever reads better on `background`. */
-export const readableInk = (background: string): string =>
-  contrast(background, INK_LIGHT) >= contrast(background, INK_DARK) ? INK_LIGHT : INK_DARK;
+/** `#abc` → `#aabbcc`, so the luminance maths reads six digits. */
+export const expandHex = (color: string): string =>
+  color.length === 4 ? `#${color.slice(1).split('').map((digit) => digit + digit).join('')}` : color;
+
+/** White or black, whichever reads better on `background`. */
+export const readableInk = (background: string): string => {
+  const hex = expandHex(background);
+  return contrast(hex, INK_LIGHT) >= contrast(hex, INK_DARK) ? INK_LIGHT : INK_DARK;
+};
 
 /**
  * The shell's colour classes and variables, for its root and for <body> (where Alloy portals
@@ -69,13 +77,18 @@ export const readableInk = (background: string): string =>
  */
 export const getShellTheme = ({ accent, brand }: { accent?: AppAccent; brand?: AppBrand }) => {
   if (!brand) return { className: getAccentClasses(accent), style: undefined };
-  const ink = readableInk(brand.color);
+  const color = expandHex(brand.color);
+  const ink = readableInk(color);
+  const isDarkBrand = ink === INK_LIGHT;
   const style = {
-    '--app-accent': brand.color,
-    '--app-brand': brand.color,
+    '--app-accent': color,
+    '--app-brand': color,
+    // What reads on the brand: the band's text and every primary button's.
     '--app-brand-ink': ink,
     // The band deepens away from its ink, so the ink keeps its contrast across it.
-    '--app-brand-deep': `color-mix(in srgb, ${brand.color} 45%, ${ink === INK_LIGHT ? INK_DARK : INK_LIGHT})`,
+    '--app-brand-deep': `color-mix(in srgb, ${color} 45%, ${isDarkBrand ? INK_DARK : INK_LIGHT})`,
+    // What reads on a light wash of the brand (the selected sidebar row).
+    '--app-brand-text': isDarkBrand ? `color-mix(in srgb, ${color} 85%, black)` : INK_DARK,
   } as CSSProperties;
   return { className: 'app-shell-accent app-shell-brand', style };
 };
