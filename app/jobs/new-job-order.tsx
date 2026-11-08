@@ -98,6 +98,7 @@ export function NewJobOrder({ locations, roles }: Props) {
             </AlloyAlert>
           )}
           <AlloyTextField
+            size="compact"
             label="Name"
             required
             placeholder="Weekend front desk cover"
@@ -106,6 +107,7 @@ export function NewJobOrder({ locations, roles }: Props) {
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <AlloySelectField
+              size="compact"
               label="Location"
               required
               placeholder="Choose a location"
@@ -114,20 +116,23 @@ export function NewJobOrder({ locations, roles }: Props) {
               onChange={(value) => update({ locationId: value })}
             />
             <AlloySelectField
+              size="compact"
               label="Role"
               placeholder="Choose a role"
               options={roles.map((r) => ({ value: r.id, label: r.name }))}
               value={draft.roleId ?? null}
               onChange={(value) => update({ roleId: value })}
             />
-            <AlloyDateField label="Start date" required value={draft.start ?? null} onChange={(start) => update({ start })} />
+            <AlloyDateField size="compact" label="Start date" required value={draft.start ?? null} onChange={(start) => update({ start })} />
             <AlloyDateField
+              size="compact"
               label="End date"
               value={draft.end ?? null}
               minDate={draft.start}
               onChange={(end) => update({ end })}
             />
             <AlloyNumberField
+              size="compact"
               label="Hourly rate"
               min={0}
               step={0.5}
