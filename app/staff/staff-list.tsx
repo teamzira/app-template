@@ -2,6 +2,7 @@
 
 import AlloyAvatar from '@teamzira/alloy/components/avatar/AlloyAvatar';
 import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import { formatHours } from '../portal/types';
 import { dayFormat, useIsBrowser } from '../portal/use-is-browser';
@@ -19,7 +20,7 @@ export function StaffList({ staff }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {staff.map((person, index) => {
         const details = [
           `${person.shiftsWorked} ${person.shiftsWorked === 1 ? 'shift' : 'shifts'} worked`,
@@ -30,6 +31,7 @@ export function StaffList({ staff }: Props) {
           <li key={person.id}>
             <AlloyListItem
               size="large"
+              {...cardRow()}
               label={person.name}
               description={details.join(' · ')}
               leadingSlot={<AlloyAvatar name={person.name} size="md" />}
@@ -47,6 +49,6 @@ export function StaffList({ staff }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }
