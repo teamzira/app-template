@@ -90,7 +90,8 @@
   text-transform: uppercase;
 }
 
-/* On the band the primary button turns over (ink fill, brand text), or it would vanish into it. */
+/* On the band the primary button turns over (ink fill, brand text), or it would vanish into it.
+   It carries the same :not() chain as the ink rule below, so it outranks it. */
 .app-shell-brand
   .app-brand-band
   button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
@@ -100,13 +101,38 @@
   color: var(--app-brand);
 }
 
-.app-shell-brand .app-brand-band button[data-variant="primary"].bg-alloy-mono-1000 * {
+.app-shell-brand
+  .app-brand-band
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
+    [data-disabled]:not([data-loading])
+  )
+  * {
   color: var(--app-brand);
 }
 
 .app-shell-brand .app-brand-band button[data-variant="float"],
 .app-shell-brand .app-brand-band button[data-variant="float"] * {
   color: var(--app-brand-ink);
+}
+
+/* A brand can be any colour, so a primary button's text is the brand's ink, not Alloy's white
+   (<body> carries the brand too, so this reaches portalled dialogs), and the selected sidebar
+   row's label is `--app-brand-text`, which reads on the brand's wash, light brands included. */
+.app-shell-brand
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
+    [data-disabled]:not([data-loading])
+  ),
+.app-shell-brand
+  button[data-variant="primary"].bg-alloy-mono-1000:not(:disabled:not([data-loading])):not(
+    [data-disabled]:not([data-loading])
+  )
+  * {
+  color: var(--app-brand-ink);
+}
+
+.app-shell-brand .app-side-nav [data-selected="true"],
+.app-shell-brand .app-side-nav [data-selected="true"] * {
+  color: var(--app-brand-text);
 }
 
 /* Cards stay white on the tinted page, so they lift off it. */
