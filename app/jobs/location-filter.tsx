@@ -29,7 +29,7 @@ export function LocationFilter({ locations, locationId }: Props) {
   return (
     <AlloySelectField
       aria-label="Location"
-      size="medium"
+      size="compact"
       className="w-40 sm:w-48"
       options={options}
       value={locationId ?? ALL}
