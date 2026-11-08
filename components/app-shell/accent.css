@@ -79,7 +79,7 @@
 }
 
 /* AlloySectionHeader mutes its subtitle with slate-400, which disappears on the band. */
-.app-shell-brand .app-brand-band .text-alloy-slate-400 {
+.app-shell-brand .app-brand-band .app-page-heading .alloy-paragraph-m.text-alloy-slate-400 {
   color: var(--app-brand-ink);
   opacity: 0.85;
 }
