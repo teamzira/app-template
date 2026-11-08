@@ -7,7 +7,7 @@ import { startTransition, Suspense, use, useEffect, useState, type ReactNode } f
 import { createRoot } from 'react-dom/client';
 import { appConfig } from '@/app/app-config';
 import { AppShell } from '@/components/app-shell/app-shell';
-import { getAccentClasses } from '@/components/app-shell/utils';
+import { getShellTheme } from '@/components/app-shell/utils';
 import { currentLocation, currentVersion, subscribeToLocation } from 'next/navigation';
 import { routes } from 'preview-app-routes';
 import { HostHeader } from './host-header';
@@ -70,11 +70,14 @@ function PreviewApp() {
   );
 }
 
-// In the app the layout puts the accent on <body>, where Alloy portals dialogs. Here <body> holds
+// In the app the layout puts the accent (or brand) on <body>, where Alloy portals dialogs. Here <body> holds
 // every sample, so it takes the accent of whichever one is on screen.
 window.addEventListener('preview:active', (event) => {
   if ((event as CustomEvent<string>).detail === __PREVIEW_APP__) {
-    document.body.className = getAccentClasses(appConfig.accent);
+    const theme = getShellTheme(appConfig);
+    document.body.className = theme.className;
+    document.body.removeAttribute('style');
+    Object.entries(theme.style ?? {}).forEach(([name, value]) => document.body.style.setProperty(name, String(value)));
   }
 });
 
