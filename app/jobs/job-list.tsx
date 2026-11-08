@@ -3,6 +3,7 @@
 import AlloyListItem from '@teamzira/alloy/components/listItem/AlloyListItem';
 import AlloyStatusTag from '@teamzira/alloy/components/tags/AlloyStatusTag';
 import Briefcase01Icon from '@teamzira/alloy/icons-js/Education/Briefcase01Icon';
+import { CardList, cardRow } from '@/components/app-shell/card-list';
 import { useOpenRecord } from '@/lib/teambridge/router';
 import { jobStatusTag, money, type JobOrder } from './types';
 import { useIsBrowser } from './use-is-browser';
@@ -41,7 +42,7 @@ export function JobList({ jobs, emptyText }: Props) {
   }
 
   return (
-    <ul className="-mx-2 flex flex-col">
+    <CardList>
       {jobs.map((job, index) => {
         const tag = jobStatusTag(job.status);
         const placed = placedText(job);
@@ -49,6 +50,7 @@ export function JobList({ jobs, emptyText }: Props) {
           <li key={job.id}>
             <AlloyListItem
               size="large"
+              {...cardRow()}
               label={job.name}
               description={describe(job, hasDates) || ' '}
               leadingSlot={<Briefcase01Icon size={20} className="text-alloy-slate-500" />}
@@ -66,6 +68,6 @@ export function JobList({ jobs, emptyText }: Props) {
           </li>
         );
       })}
-    </ul>
+    </CardList>
   );
 }
