@@ -170,8 +170,16 @@ export const appConfig: AppShellConfig = {
 - The shell does the rest: each page's title sits in a **band**, a card as wide as the page's
   content (12px radius) in the brand colour, fading to a deeper shade of it, with the company name above the title; the page behind the
   content takes a **light wash** of the colour, cards stay white; primary buttons, tabs and the
-  selected sidebar row take the colour; on the band, the primary button turns over (white fill,
-  brand text). Text on the band is white or near-black, whichever reads better on the colour.
+  selected sidebar row take the colour; on the band, the primary button turns over (ink fill,
+  brand text).
+- **Contrast holds for any colour.** The shell picks the brand's **ink**, white or black, whichever
+  reads better on it (`readableInk`); one of the two always reaches 4.5:1 or better, so a brand
+  needs no hue check the way `accent` does, and a light brand (yellow, matcha) is fine. The ink
+  is the text on the band and on every primary button, in dialogs too; on the band the button
+  turns over (ink fill, brand text). The selected sidebar row's label is the brand shaded toward
+  black, or black for a light brand. Never set Alloy's white button text or a hand-picked text
+  colour over the brand; leave text colour to the shell.
+- Give `color` as `#rrggbb` (a short `#rgb` is read as its six-digit form).
 - The company name is text only: still no logo, and no other branding anywhere else on the page.
   Everything below the band follows the same rules as any other app.
 - A preview or demo for a company that isn't the account using it is labelled as a concept on
