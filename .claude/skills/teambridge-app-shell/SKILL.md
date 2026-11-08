@@ -178,7 +178,8 @@ export const appConfig: AppShellConfig = {
   is the text on the band and on every primary button, in dialogs too; on the band the button
   turns over (ink fill, brand text). The selected sidebar row's label is the brand shaded toward
   black, or black for a light brand. Never set Alloy's white button text or a hand-picked text
-  colour over the brand; leave text colour to the shell.
+  colour over the brand, and never fade it with opacity (that blends it back toward the brand
+  and below 4.5:1); leave text colour to the shell.
 - Give `color` as `#rrggbb` (a short `#rgb` is read as its six-digit form).
 - The company name is text only: still no logo, and no other branding anywhere else on the page.
   Everything below the band follows the same rules as any other app.
