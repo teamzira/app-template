@@ -33,6 +33,7 @@ secrets. A few Alloy components (stat cards, segmented controls) import SCSS, wh
 | `samples/job-orders` | Job orders | tabs, purple accent, New job order |
 | `samples/scheduling` | Scheduling | sidebar with a folder, a full-width calendar page and a side panel |
 | `samples/staffing` | Staffing workspace | sidebar with a folder, green accent, New job order |
+| `samples/branded` | Branded workspace (concept: TAG MedStaffing, sample data) | the staffing workspace with `brand`: a band in the brand colour, tinted page |
 
 **Preview without an account.** The `samples/preview` branch builds all the samples into one static
 page that runs in the browser on sample rows: `yarn preview:build` writes
