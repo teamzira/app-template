@@ -57,17 +57,31 @@
    light wash of it behind the content, and its ink (white or near-black, whichever reads) on the
    band. Alloy colours its header text with its own tokens, so the band overrides them here. */
 .app-shell-brand .app-page {
-  background-color: color-mix(in srgb, var(--app-brand) 5%, white);
+  background-color: color-mix(in srgb, var(--app-brand) 6%, white);
 }
 
+/* The band fades from the brand colour to a deeper shade of it (`--app-brand-deep`, away from the
+   ink), the way staffing brands' own sites carry their colour into a hero; the title side stays at
+   full strength. */
 .app-shell-brand .app-brand-band {
-  background-color: var(--app-brand);
+  background: linear-gradient(
+    100deg,
+    var(--app-brand) 0%,
+    var(--app-brand) 35%,
+    var(--app-brand-deep) 100%
+  );
   color: var(--app-brand-ink);
 }
 
 .app-shell-brand .app-brand-band h2,
 .app-shell-brand .app-brand-band p {
   color: var(--app-brand-ink);
+}
+
+/* AlloySectionHeader mutes its subtitle with slate-400, which disappears on the band. */
+.app-shell-brand .app-brand-band .text-alloy-slate-400 {
+  color: var(--app-brand-ink);
+  opacity: 0.85;
 }
 
 .app-shell-brand .app-brand-band .app-brand-name {
