@@ -49,7 +49,8 @@ between parts), then any category tag under it. Trailing: one status tag and at 
 the text keeps its width on a phone. The row opens the record (`?rid=` in the app template); a
 chevron is the only "go" signal. Rows in a card run edge to edge: wrap them in `CardList` and give
 each `AlloyListItem` `{...cardRow(size)}` (`components/app-shell/card-list.tsx`), so the hover
-reaches the card's sides and the content keeps the card's 20px gutter.
+reaches the card's sides and bottom, and the content keeps the card's 20px gutter. The last row
+has no divider.
 
 **Stat cards.** One row of 2–4 `AlloyStatCard`s at the top of a page, two per row on a phone.
 Default `accent` is `slate`. Use `red`, `orange` or `yellow` only when the number is a problem
