@@ -54,7 +54,7 @@
 }
 
 /* Branded apps (`brand` in app-config): the brand colour as a band behind each page's title, a
-   light wash of it behind the content, and its ink (white or near-black, whichever reads) on the
+   light wash of it behind the content, and its ink (white or black, whichever reads) on the
    band. Alloy colours its header text with its own tokens, so the band overrides them here. */
 .app-shell-brand .app-page {
   background-color: color-mix(in srgb, var(--app-brand) 6%, white);
