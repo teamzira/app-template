@@ -47,7 +47,9 @@ with rows, not a card per row.
 **List rows.** Leading: an avatar or a 20px icon, never both. Title, then one detail line (`·`
 between parts), then any category tag under it. Trailing: one status tag and at most one action, so
 the text keeps its width on a phone. The row opens the record (`?rid=` in the app template); a
-chevron is the only "go" signal.
+chevron is the only "go" signal. Rows in a card run edge to edge: wrap them in `CardList` and give
+each `AlloyListItem` `{...cardRow(size)}` (`components/app-shell/card-list.tsx`), so the hover
+reaches the card's sides and the content keeps the card's 20px gutter.
 
 **Stat cards.** One row of 2–4 `AlloyStatCard`s at the top of a page, two per row on a phone.
 Default `accent` is `slate`. Use `red`, `orange` or `yellow` only when the number is a problem
