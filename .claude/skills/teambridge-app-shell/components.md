@@ -15,7 +15,7 @@ a calendar tool page) and `samples/staffing` (sidebar, green), all in `teamzira/
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | A number with a label (overdue, due this week)                      | `statCard/AlloyStatCard`                                                                                           | Gradient or tinted tiles (a colour per metric), coloured top borders, icon circles beside the number |
 | A box around a group of content                                     | `<section className="alloy-chart-card">` (Alloy's card chrome)                                                     | Hand-rolled `border rounded-xl p-6`, shadows, coloured left or top borders                           |
-| A list of records (people, steps, reqs)                             | `listItem/AlloyListItem` rows inside one card                                                                      | Custom `<div>` rows, each row its own card                                                           |
+| A list of records (people, steps, reqs)                             | `listItem/AlloyListItem` rows in a `CardList`, inside one card                                                     | Custom `<div>` rows, each row its own card                                                           |
 | A person                                                            | `avatar/AlloyAvatar` (`name` makes the initials)                                                                   | Coloured circles with hand-written initials                                                          |
 | A status (Overdue, Not started, Done)                               | `tags/AlloyStatusTag`                                                                                              | Filled red or grey buttons, red "35 days late" text, coloured dots before text                       |
 | A category or type (Compliance, Frontline)                          | `tags/AlloyTag` with `color={AlloyColor.GREY}`                                                                     | One colour per category                                                                              |
@@ -40,17 +40,27 @@ for in progress, `INACTIVE` for not started, `POSITIVE` for done. Categories, te
 stay grey. The account accent appears only on primary buttons, the selected tab or sidebar row,
 and links.
 
-**One card.** `alloy-chart-card` is the only card: hairline border, 12px corner, 20px padding, white.
-No shadows, gradients, tinted backgrounds or coloured edges. Cards don't nest. A list is one card
-with rows, not a card per row.
+**One card.** `alloy-chart-card` is the only card: hairline border (`--color-border-opaque`), 12px
+corner, 20px padding, white. No shadows, gradients, tinted backgrounds or coloured edges. Cards
+don't nest. A list is one card with rows, not a card per row, and the one thing that breaks the
+card's padding (below).
 
 **List rows.** Leading: an avatar or a 20px icon, never both. Title, then one detail line (`·`
 between parts), then any category tag under it. Trailing: one status tag and at most one action, so
 the text keeps its width on a phone. The row opens the record (`?rid=` in the app template); a
-chevron is the only "go" signal. Rows in a card run edge to edge: wrap them in `CardList` and give
-each `AlloyListItem` `{...cardRow(size)}` (`components/app-shell/card-list.tsx`), so the hover
-reaches the card's sides and bottom, and the content keeps the card's 20px gutter. The last row
-has no divider.
+chevron is the only "go" signal.
+
+**A list in a card.** The rows run edge to edge: wrap them in `CardList` and give each
+`AlloyListItem` `{...cardRow(size)}` (`components/app-shell/card-list.tsx`).
+
+- The list reaches the card's sides and bottom: a row's hover and divider span the card's full
+  width, and the card has no padding under the last row. The list's bottom corners follow the
+  card's, so the last row's hover doesn't square them off.
+- The row's content keeps the card's 20px gutter, so avatars and labels line up with the card's
+  title.
+- The last row has no divider (`divider={index < rows.length - 1}`): the card's border is its edge.
+- An empty list is one line of `text-alloy-slate-500` in the card's normal padding, not an empty
+  `CardList`.
 
 **Stat cards.** One row of 2–4 `AlloyStatCard`s at the top of a page, two per row on a phone.
 Default `accent` is `slate`. Use `red`, `orange` or `yellow` only when the number is a problem
