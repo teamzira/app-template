@@ -69,10 +69,13 @@ export const readableInk = (background: string): string =>
  */
 export const getShellTheme = ({ accent, brand }: { accent?: AppAccent; brand?: AppBrand }) => {
   if (!brand) return { className: getAccentClasses(accent), style: undefined };
+  const ink = readableInk(brand.color);
   const style = {
     '--app-accent': brand.color,
     '--app-brand': brand.color,
-    '--app-brand-ink': readableInk(brand.color),
+    '--app-brand-ink': ink,
+    // The band deepens away from its ink, so the ink keeps its contrast across it.
+    '--app-brand-deep': `color-mix(in srgb, ${brand.color} 45%, ${ink === INK_LIGHT ? INK_DARK : INK_LIGHT})`,
   } as CSSProperties;
   return { className: 'app-shell-accent app-shell-brand', style };
 };

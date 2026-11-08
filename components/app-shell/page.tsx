@@ -66,6 +66,7 @@ export function AppPage({ title, description, actions, width = 'standard', panel
             ) : undefined
           }
           titleAs="h2"
+      size={brand ? 'xl' : undefined}
           // On a phone the actions go under the title, or a filter and a button squeeze it into a
           // column a word wide.
           className="max-sm:flex-col max-sm:items-stretch"
