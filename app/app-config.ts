@@ -10,7 +10,7 @@ import type { AppShellConfig } from '@/components/app-shell/types';
  */
 export const appConfig: AppShellConfig = {
   navStyle: 'sidebar',
-  brand: { name: 'TAG MedStaffing', color: '#0e6e7c' },
+  brand: { name: 'TAG MedStaffing', color: '#0f7aa0' },
   sections: [
     { href: '/', label: 'Job orders', icon: Briefcase01Icon },
     { href: '/candidates/', label: 'Candidates', icon: Users01Icon },
