@@ -167,8 +167,8 @@ export const appConfig: AppShellConfig = {
 - `name` is the company's name as its own site writes it. `color` is its main brand colour, the
   exact hex from its site, brand guide or a screenshot (its main button or headings, not the
   logo's lightest tint); ask if it isn't clear. `accent` is ignored.
-- The shell does the rest: each page's title sits in a full-width **band** in the brand colour,
-  fading to a deeper shade of it, with the company name above the title; the page behind the
+- The shell does the rest: each page's title sits in a **band**, a card as wide as the page's
+  content (12px radius) in the brand colour, fading to a deeper shade of it, with the company name above the title; the page behind the
   content takes a **light wash** of the colour, cards stay white; primary buttons, tabs and the
   selected sidebar row take the colour; on the band, the primary button turns over (white fill,
   brand text). Text on the band is white or near-black, whichever reads better on the colour.
