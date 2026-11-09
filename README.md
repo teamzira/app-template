@@ -6,19 +6,18 @@ Deploy it to Vercel with the button that fits the app (see [Deployment](#deploym
 
 **For one account**, without a database. The app finds its collections and fields by the ids pinned in `app/schema.ts`, or by name.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG,NPM_TOKEN&envDescription=The%20first%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.%20NPM_TOKEN%20is%20a%20GitHub%20token%20with%20read%3Apackages%20for%20the%20teamzira%20org,%20to%20install%20Alloy.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment)
 
 **For several accounts**, with a Neon database. Each account's admin chooses its collections and fields in Settings, and the database keeps the choice.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG,NPM_TOKEN&envDescription=The%20first%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.%20NPM_TOKEN%20is%20a%20GitHub%20token%20with%20read%3Apackages%20for%20the%20teamzira%20org,%20to%20install%20Alloy.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
-## Alloy app shell (`samples/*` branches)
+## Alloy app shell
 
-The `samples/alloy-shell` branch, and the sample apps built on it, use **Alloy**
-(`@teamzira/alloy`, the Teambridge design system) and a standard app shell instead of the shadcn
-copy below. Layout rules live in the `teambridge-app-shell` skill
-(`.claude/skills/teambridge-app-shell/`); the nav style, sections and accent colour in
-`app/app-config.ts`.
+Apps use **Alloy** (`@teamzira/alloy`, the Teambridge design system) inside a standard app shell
+(`components/app-shell/`). Layout rules live in the `teambridge-app-shell` skill
+(`.claude/skills/teambridge-app-shell/`); the nav style, sections and accent colour, or a branded
+look, in `app/app-config.ts`.
 
 Alloy is published privately to GitHub Packages, so installs need **`NPM_TOKEN`**, a GitHub token
 with `read:packages` for the `teamzira` org, in the environment (`.npmrc` reads it). Set it locally
@@ -26,22 +25,31 @@ before `yarn install`, and in the Vercel project's environment variables alongsi
 secrets. A few Alloy components (stat cards, segmented controls) import SCSS, which is why
 `sass` is a dev dependency here.
 
+Working examples live on the `samples/*` branches, all built on this shell:
+
 | Branch | App | Nav |
 | --- | --- | --- |
 | `samples/timesheet` | Timesheet | none: one page |
-| `samples/client-portal` | Client portal | tabs |
+| `samples/client-portal` | Client portal | tabs, pink accent |
+| `samples/job-orders` | Job orders | tabs, purple accent |
 | `samples/scheduling` | Scheduling | sidebar with a folder, a full-width calendar page and a side panel |
+| `samples/staffing` | Staffing workspace | sidebar with a folder, green accent |
+| `samples/branded` | Branded workspace (concept on sample data) | sidebar, `brand`: the brand colour in a band behind each title |
+
+`samples/preview` builds all of them into one static page on sample rows, with no account.
 
 To put a sample on an account: create the app in Teambridge (Settings → Internal → App
 Management) as single-account for that account, deploy its branch to Vercel with the app's client
 ID, client secret, webhook secret, slug and `NPM_TOKEN`, then install it from the App Library.
 
+## Getting Started
 
 ### 1. Clone and Install
 
 ```bash
 git clone https://github.com/teambridge/teambridge-app-template.git my-app
 cd my-app
+export NPM_TOKEN=<GitHub token with read:packages for teamzira>   # Alloy installs from GitHub Packages
 yarn install
 ```
 
@@ -83,7 +91,7 @@ What's rendered is **example code** — a demo shifts dashboard built on the des
 
 ## Design System
 
-Apps built from this template use the **Alloy** design system, replicated locally via Tailwind tokens and shadcn/ui — no runtime dependency on the Alloy package.
+Pages are built from **Alloy** components (`@teamzira/alloy`) inside the app shell; see [Alloy app shell](#alloy-app-shell). The local Alloy tokens and shadcn/ui primitives below style the setup page and anything Alloy doesn't cover yet.
 
 - **`app/globals.css`** defines the full Alloy palette (Layer 1) and semantic tokens (Layer 2), then exposes them as Tailwind utilities. shadcn-compatible aliases (`bg-background`, `bg-primary`, `text-muted-foreground`, etc.) auto-flip with the `.dark` class on `<html>`.
 - **`components/ui/`** ships with 22 pre-installed shadcn primitives (button, card, dialog, table, tabs, alert, badge, etc.) — already themed to Alloy. They're owned by your repo, edit freely.
@@ -407,9 +415,10 @@ interface TBContext {
 
 Deploy with one of the two buttons at the top of this README. Each clones the repository into your GitHub, GitLab or Bitbucket account, creates a Vercel project, and asks for what the app needs:
 
-1. **The four Teambridge values**: `TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET` and `APP_SLUG`, from the app's page in the Teambridge Dev Portal (Settings → Dev Portal), where you register the app first. None of them can be left for later: the proxy signs every request with the webhook secret, and the slug sets the path the app is served under. One deployment and one set of credentials serve every account the app is installed on. Deployments always build for the Teambridge proxy; the `TB_DEV_*` values are for local development only.
-2. **The Neon database**, with the button for several accounts only. That button makes it mandatory (`products` in its URL names Neon's Postgres product, and the flow won't deploy until it exists). The defaults are right: in the flow's Storage section click **Add** next to Neon, then **Continue**, then **Create**. The region, the Free plan and the generated name can all stay as they are. The dialog also offers two add-ons, Auth and Realtime; the app uses neither (users are already signed in to Teambridge, which identifies them on every request), so they can be left alone. Auth is on by default and does no harm beyond a few unused env vars; turn it off only if you want to keep the project tidy. Create provisions the database in a few seconds and connects it to the project, which sets `DATABASE_URL` (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment; that is where the app keeps each account's settings. No Neon account or sign-in is involved; billing, if any, goes through Vercel. The free plan's one drawback is that the database suspends after five idle minutes, so the first request after a pause waits a second or so while it resumes.
-3. **The app's origin** in the Dev Portal: the project's production domain, `https://<project>.vercel.app` or a custom domain, never a per-deployment URL. On teams with Deployment Protection the generated deployment URLs sit behind Vercel Authentication, which the Teambridge proxy can't pass; the production domain stays public. The `/apps/<slug>` path is appended for you.
+1. **`NPM_TOKEN`**, a GitHub token with `read:packages` for the `teamzira` org, so the build can install Alloy from GitHub Packages.
+2. **The four Teambridge values**: `TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET` and `APP_SLUG`, from the app's page in the Teambridge Dev Portal (Settings → Dev Portal), where you register the app first. None of them can be left for later: the proxy signs every request with the webhook secret, and the slug sets the path the app is served under. One deployment and one set of credentials serve every account the app is installed on. Deployments always build for the Teambridge proxy; the `TB_DEV_*` values are for local development only.
+3. **The Neon database**, with the button for several accounts only. That button makes it mandatory (`products` in its URL names Neon's Postgres product, and the flow won't deploy until it exists). The defaults are right: in the flow's Storage section click **Add** next to Neon, then **Continue**, then **Create**. The region, the Free plan and the generated name can all stay as they are. The dialog also offers two add-ons, Auth and Realtime; the app uses neither (users are already signed in to Teambridge, which identifies them on every request), so they can be left alone. Auth is on by default and does no harm beyond a few unused env vars; turn it off only if you want to keep the project tidy. Create provisions the database in a few seconds and connects it to the project, which sets `DATABASE_URL` (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment; that is where the app keeps each account's settings. No Neon account or sign-in is involved; billing, if any, goes through Vercel. The free plan's one drawback is that the database suspends after five idle minutes, so the first request after a pause waits a second or so while it resumes.
+4. **The app's origin** in the Dev Portal: the project's production domain, `https://<project>.vercel.app` or a custom domain, never a per-deployment URL. On teams with Deployment Protection the generated deployment URLs sit behind Vercel Authentication, which the Teambridge proxy can't pass; the production domain stays public. The `/apps/<slug>` path is appended for you.
 
 ### One account or several
 

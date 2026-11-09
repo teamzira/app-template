@@ -142,7 +142,7 @@ Log the full `TBApiError` (status, path, body) with `console.error` on the serve
 
 ## Design system rules
 
-> **On the `samples/*` branches, Alloy replaces everything in this section.** Pages are built from
+> **Alloy replaces everything in this section.** Pages are built from
 > `@teamzira/alloy` components inside the app shell (`components/app-shell/`), following the
 > `teambridge-app-shell` skill (`.claude/skills/teambridge-app-shell/`). The shadcn primitives
 > below remain for the setup page only.
