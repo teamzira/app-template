@@ -28,7 +28,7 @@ export function SetupNotice({ issues, className }: { issues: SchemaIssue[]; clas
   if (shown.length === 0) return null;
 
   return (
-    <Alert className={className}>
+    <Alert variant="warning" className={className}>
       <AlertTriangleIcon />
       <AlertTitle>Some features are limited</AlertTitle>
       <AlertDescription>

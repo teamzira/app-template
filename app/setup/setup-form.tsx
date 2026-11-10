@@ -192,7 +192,7 @@ export function SetupForm({
 
   if (collections.length === 0) {
     return (
-      <Alert>
+      <Alert variant="warning">
         <AlertTriangleIcon />
         <AlertTitle>This account has no collections yet</AlertTitle>
         <AlertDescription>
@@ -206,7 +206,7 @@ export function SetupForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {missing.length > 0 && (
-        <Alert>
+        <Alert variant="warning">
           <AlertTriangleIcon />
           <AlertTitle>This app needs a few things set up before it can run</AlertTitle>
           <AlertDescription>

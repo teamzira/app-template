@@ -3,14 +3,22 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Mirrors AlloyAlert: an inline banner on a tinted surface, not a floating card, with the
+// leading icon set in a 32px chip. The status tokens in globals.css flip for dark mode.
 const alertVariants = cva(
-  "relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-button border px-4 py-3 text-sm shadow-md has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
+  "relative grid w-full grid-cols-[0_1fr] items-start gap-y-0 rounded-lg border px-3 py-2.5 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*8)_1fr] has-[>svg]:gap-x-3 [&>svg]:row-span-2 [&>svg]:size-8 [&>svg]:self-center [&>svg]:rounded-button [&>svg]:p-1.5",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        default:
+          "border-border bg-muted text-foreground *:data-[slot=alert-description]:text-(--color-content-secondary) [&>svg]:bg-accent [&>svg]:text-muted-foreground",
+        info: "border-(--color-info-border) bg-(--color-info-bg) text-(--color-info-content) [&>svg]:bg-(--color-info-content)/10",
+        success:
+          "border-(--color-success-border) bg-(--color-success-bg) text-(--color-success-content) [&>svg]:bg-(--color-success-content)/10",
+        warning:
+          "border-(--color-warning-border) bg-(--color-warning-bg) text-(--color-warning-content) [&>svg]:bg-(--color-warning-content)/10",
         destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current",
+          "border-(--color-error-border) bg-(--color-error-bg) text-(--color-error-content) [&>svg]:bg-(--color-error-content)/10",
       },
     },
     defaultVariants: {
@@ -19,15 +27,23 @@ const alertVariants = cva(
   }
 )
 
+type AlertVariant = NonNullable<VariantProps<typeof alertVariants>["variant"]>
+
+// Errors and warnings interrupt; the rest are announced politely, as in AlloyAlert.
+const ASSERTIVE: ReadonlySet<AlertVariant> = new Set(["warning", "destructive"])
+
 function Alert({
   className,
   variant,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+  const assertive = ASSERTIVE.has(variant ?? "default")
   return (
     <div
       data-slot="alert"
-      role="alert"
+      data-variant={variant ?? "default"}
+      role={assertive ? "alert" : "status"}
+      aria-live={assertive ? undefined : "polite"}
       className={cn(alertVariants({ variant }), className)}
       {...props}
     />
@@ -38,10 +54,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="alert-title"
-      className={cn(
-        "col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight",
-        className
-      )}
+      className={cn("col-start-2 font-medium leading-5", className)}
       {...props}
     />
   )
@@ -55,7 +68,7 @@ function AlertDescription({
     <div
       data-slot="alert-description"
       className={cn(
-        "col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed",
+        "col-start-2 grid justify-items-start gap-1 text-sm leading-5 [&_p]:leading-5",
         className
       )}
       {...props}

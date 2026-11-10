@@ -224,7 +224,7 @@ export default async function Home({
 
         <CardContent>
           {!credentials ? (
-            <Alert>
+            <Alert variant="warning">
               <AlertTriangleIcon />
               <AlertTitle>Configuration required</AlertTitle>
               <AlertDescription>

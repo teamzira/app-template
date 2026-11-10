@@ -47,7 +47,7 @@ export default async function SetupPage() {
   if (!getAppCredentials()) {
     return (
       <SetupShell>
-        <Alert>
+        <Alert variant="warning">
           <AlertTriangleIcon />
           <AlertTitle>Configuration required</AlertTitle>
           <AlertDescription>
