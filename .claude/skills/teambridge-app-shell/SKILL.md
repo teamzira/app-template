@@ -108,7 +108,7 @@ tab the 16px form. Settings is added by the shell when the deployment can save s
 foot of the sidebar, last among tabs, or as a gear beside a one-page app's title.
 
 `components/app-shell/` is shared by every app. Don't change it inside one app: a fix or a new
-option goes to `samples/alloy-shell` in `teamzira/app-template`, then into each app, so the apps
+option goes to the template (`teamzira/app-template`), then into each app, so the apps
 stay alike.
 
 ## Choosing the nav
