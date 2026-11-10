@@ -79,6 +79,49 @@ uppercase labels, no letter-spacing, no coloured headings.
 would be ("No steps due this week"). Loading: skeleton rows in the card. Error: `AlloyAlert
 variant="error"` with what to do next.
 
+**List or table.** A list (`AlloyListItem` rows) when each record is a name plus a line or two,
+or the page is mostly used on a phone. A table when people compare the same few facts across
+many records.
+
+**Tables.** `table/AlloyTable` with `columns` and `data`, inside one card.
+
+- **Paging:** `pagination={{ mode: 'server', page, pageSize, total, onPageChange }}`, with
+  `total` from the API's `totalCount`. Page size 25 by default, never above 50 (the API's page).
+- **Sorting:** a column is `sortable` only when the route sorts the whole set. Sorting just the
+  page on screen is wrong once there's a second page. A `comparator` is fine only when every row
+  is loaded.
+- **Columns:** the record's name first. Numbers, money and hours right-aligned
+  (`align="right"`); dates, text and tags left. Status as `AlloyStatusTag`. Up to about seven
+  columns: past that, use fewer columns or a list.
+- **Rows** open the record: `onRowClick={(row) => openRecord(row.id)}` with `rowAriaLabel`. At
+  most one row action, which takes `stopRowClick` so it doesn't also open the row. Actions on
+  several rows use `selection` and the table's row action toolbar.
+- **States:** `isLoading` while fetching, `emptyState` as one line ("No timesheets this week").
+  An error replaces the table with an `AlloyAlert`.
+- **Phone:** the table scrolls sideways inside its card; the page doesn't.
+
+**Filter bar.** The first block of the content, one row, wrapping on a phone.
+
+- **Order:** search (`AlloySearchField`) first, then `AlloySelectField`s, then a date range, then
+  Export last. A tool page puts its period stepper first (below).
+- **In the URL:** every filter and the search are query params (`?status=open&q=ana`), so a reload
+  or a shared link shows the same list (AGENTS.md → "URL sync and deep links"). Changing a filter
+  goes back to page 1.
+- **On the server:** filters and search go to the API route and run over the whole set, never over
+  the loaded page. Search waits about 300 ms after the last keystroke.
+- **Clear:** a `tertiary` "Clear filters" button appears once any filter is set.
+- No filter chips, saved views or filter panels.
+
+**Charts.** Only where a picture tells more than a stat card or a list.
+
+- A breakdown: `AlloyBarList`. A number and its change: `AlloyStatCard`. Activity per day:
+  `calendarHeatmap/AlloyCalendarHeatmap`.
+- A trend over time: see "Not in Alloy yet".
+- One chart per card, titled with `AlloySectionHeader size="m"`. The period goes in the title
+  ("Hours, last 8 weeks").
+- Status colours mean status here too. Other series use `var(--chart-1)` to `var(--chart-5)` in
+  order, at most five.
+
 ## Tool pages: calendars and schedules
 
 A month calendar or schedule is a `width="full"` page, usually with a side panel.
@@ -106,3 +149,11 @@ swap it in when it ships (see the skill's "Alloy is the default").
 | `AlloyPeriodStepper`                   | ‹ Today › with the period label (day, week, month, pay period) | Two `AlloyButton style="float" iconOnly` around a `tertiary` "Today", label in `alloy-label-l` |
 | `AlloyProgressBar`                     | "3 of 21 done", "Filled 98%"                                   | Text ("3 of 21 done", "98% filled"); no hand-drawn bar                                         |
 | Inline status picker                   | Changing a row's status in place                               | `AlloyDropdown` on an `AlloyButton style="tertiary"`, status shown with `AlloyStatusTag`       |
+
+These two have no Alloy piece on the way yet. Use what the table says, and raise them with the
+Alloy team:
+
+| Piece        | For                                       | Until then                                                                                         |
+| ------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| A toast      | "Saved" after an action                   | None: don't mount sonner. The change shows itself (see the skill's "After an action")              |
+| A line chart | A trend over time (hours per week)        | `components/ui/chart.tsx` (Recharts) in an `alloy-chart-card`: a line or bars, `var(--chart-N)` colours, no gradient fills, no 3D, axis text `alloy-label-s text-alloy-slate-500` |

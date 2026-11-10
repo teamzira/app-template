@@ -1,6 +1,6 @@
 ---
 name: teambridge-app-shell
-description: Lay out a Teambridge app built from this template with the standard shell — a sidebar, tab or no nav chosen in app/app-config.ts, the account's accent colour or a branded band, one page frame (AppPage) with the same width, gutter and title everywhere, one optional banner and side panel, and Alloy components for everything inside. Use when building or restyling any page of this app, choosing sidebar, tabs or no nav, setting the account colour or brand, building a calendar or schedule page, or when asked to make the app "look consistent", "use the same padding/title" or "use Alloy".
+description: Lay out a Teambridge app built from this template with the standard shell — a sidebar, tab or no nav chosen in app/app-config.ts, the account's accent colour or a branded band, one page frame (AppPage) with the same width, gutter and title everywhere, one optional banner and side panel, and Alloy components for everything inside. Use when building or restyling any page of this app, choosing sidebar, tabs or no nav, setting the account colour or brand, building a calendar or schedule page, a form, dialog, table or filter bar, formatting dates, times or money, writing UI copy, or when asked to make the app "look consistent", "use the same padding/title" or "use Alloy".
 ---
 
 # Teambridge app shell
@@ -106,6 +106,10 @@ export const appConfig: AppShellConfig = {
 Pass each icon as the component (`CalendarIcon`), not an element: the sidebar draws `.Raw`, a
 tab the 16px form. Settings is added by the shell when the deployment can save settings: at the
 foot of the sidebar, last among tabs, or as a gear beside a one-page app's title.
+
+`components/app-shell/` is shared by every app. Don't change it inside one app: a fix or a new
+option goes to `samples/alloy-shell` in `teamzira/app-template`, then into each app, so the apps
+stay alike.
 
 ## Choosing the nav
 
@@ -236,6 +240,107 @@ line inside the app; "MENU" labels or plain group headings in the sidebar (use a
 tiles or emoji beside the title; badges or dates beside the description; eyebrows, stripes,
 gradients, tinted cards, shadows, illustrations or background images; any banner but `AppBanner`;
 breadcrumbs, back links or a second nav; a different width or gutter per page; `min-h-screen`.
+
+## Forms and dialogs
+
+- **Where a form goes:**
+  - Editing a Teambridge record's own fields: open the host's record panel (`?rid=`, see AGENTS.md).
+    Don't build a form for it.
+  - Creating or editing something with up to about six fields: an `AlloyDialog` (`size="sm"` or
+    `"md"`), its buttons in `actions`.
+  - Anything longer, or in steps: its own page at `width="readable"`.
+  - One value in a row (a note, a count): `AlloyInlineEdit`.
+- **Fields:** one column, labels above (`layout="vertical"`). Two short fields that belong together
+  (start and end) may share a row on a wide screen. Each field takes `label` (sentence case),
+  `required` when it is, `hint` for a short help line, and `error` once the person has left the
+  field or tried to save. Never a placeholder in place of a label.
+- **Buttons:** Cancel (`secondary`) then the action (`primary`), at the foot of the form or in the
+  dialog's `actions`, right-aligned. The action names what it does: "Add shift", "Save changes".
+- **Saving:** the action button takes `loading` while the request runs, which also blocks a second
+  click. A failed save keeps the form open with what was typed, and shows an `AlloyAlert
+  variant="error"` above the buttons, mapped as in AGENTS.md → "Error messages".
+- **Destructive actions** ask first with `useConfirmDialog` (`isDanger`): the title names the thing
+  ("Delete this shift?"), `okText` repeats the verb ("Delete shift"), `cancelText` is "Cancel".
+- **Unsaved changes:** closing a dialog with edits in it asks "Discard changes?" the same way.
+- **Dates and times** use `AlloyDateField` / `AlloyDateTimeField`, converted to ISO in the browser
+  before they're sent (AGENTS.md → "Writing values").
+
+## After an action
+
+- Alloy has no toast yet (components.md → "Not in Alloy yet"), so don't mount one. A change shows
+  itself: the dialog closes and the list updates (`router.refresh()`, or the updated row from the
+  action's result).
+- An error stays where the person acted: in the dialog or form as an `AlloyAlert`, or in the row
+  for a row action. Never only in the console.
+- Don't move people elsewhere after an action unless the action created a page to go to.
+
+## Formatting
+
+Every app writes dates, times and numbers the same way. Format with `Intl` and `en-US` in a
+**client component**: a server component runs in the server's time zone (UTC), not the viewer's.
+
+| Value                       | Write it as                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| Date, this year             | `Nov 10`; with the weekday where the day matters (schedules) `Mon, Nov 10`   |
+| Date, another year          | `Nov 10, 2025`                                                               |
+| Time                        | `9:00 AM`; a range `9:00 AM – 5:00 PM` (en dash); one that ends the next day adds `(+1 day)` |
+| Date and time               | `Nov 10, 9:00 AM`                                                            |
+| Time zone                   | The viewer's, unless the API returns the record's own; then add its abbreviation (`9:00 AM PST`) |
+| Recent or soon (within 7 days) | `2 hours ago`, `in 3 days`, `Yesterday`, `Tomorrow`; past 7 days, the date |
+| Hours worked                | Decimal, up to two places: `7.5 hrs`, `40 hrs`                               |
+| Money                       | `Intl.NumberFormat` currency in the currency the API returns: `$1,234.50`. Never assume USD |
+| Counts                      | Digits with separators: `1,204`; `3 of 21 done`                              |
+| Percent                     | Whole numbers unless the difference matters: `98%`                           |
+| No value                    | `—`                                                                          |
+
+## Words
+
+- **Sentence case everywhere:** titles, tabs, buttons, labels, column headers ("Start time", not
+  "Start Time"). No all-caps labels, no exclamation marks, no "Oops".
+- **Name things the way the account does.** Collections and fields come from the resolved schema;
+  use their names in copy ("Facility" if the account says Facility), singular for one record.
+  Don't invent synonyms: if the account says Worker, every label says Worker.
+- **Buttons are a verb and a noun:** "Add shift", "Export hours". Never "Submit", "OK" or "Click
+  here".
+- **Empty states** say what's missing and when it would appear: "No shifts this week". Add the one
+  next step if there is one ("Add shift"), as a button, not a sentence.
+- **Errors** say what couldn't happen and what to do next (AGENTS.md → "Error messages").
+
+## Who can do what
+
+- Teambridge decides access: the app shows what the API returns for the current user
+  (`getTBClient(ctx)`), and doesn't guess roles to hide things. No role reaches the app yet; see
+  AGENTS.md → "The gate".
+- An action the API refuses (403) says "You don't have permission to …" where the person acted.
+- A `readOnly` field shows as text, not a disabled input.
+
+## Accessibility
+
+- An icon-only `AlloyButton` takes `iconOnly` and an `aria-label` that names the action
+  ("Next week"), not the icon.
+- Anything that opens a record is a link or a button: `TBRecordLink`, or `AlloyTable`'s
+  `onRowClick` with `rowAriaLabel`. Never `onClick` on a `<div>`.
+- Status is never colour alone: a dot or chip also carries its label, as text or in a tooltip.
+- Use Alloy's dialogs, dropdowns and tooltips for focus, Escape and keyboard handling; don't build
+  them by hand. No animation of the app's own.
+
+## Light only
+
+Apps are light only for now: Alloy's tokens have no dark set. Don't add `dark:` variants, a
+`.dark` class or a theme switch.
+
+## Before you hand off
+
+Check each before calling a page done; none of these is caught by lint yet:
+
+- No imports from `lucide-react`, and none from `components/ui/` outside `app/setup/` (and
+  `components/ui/chart.tsx`, the chart stand-in).
+- No hex colours, `text-[#…]`, arbitrary spacing or `min-h-screen`.
+- Every `AlloyButton` has `size="medium"` and every field `size="compact"`.
+- Every page is one `AppPage`, with loading, empty and error states.
+- Dates, times and numbers follow Formatting; copy follows Words.
+- Each stand-in for a missing Alloy piece is listed in the PR.
+- At phone width (390px) nothing scrolls sideways except a table inside its card.
 
 ## Data
 
