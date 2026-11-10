@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withAlloy } from "@teamzira/alloy/next";
 
 const isDevMode = process.env.TB_DEV_MODE === "true";
 
@@ -40,4 +41,6 @@ const nextConfig: NextConfig = {
     : { experimental: { serverActions: { allowedOrigins: [new URL(tbServerBaseUrl).host] } } }),
 };
 
-export default nextConfig;
+// withAlloy compiles @teamzira/alloy's .tsx source and points its icon imports at the
+// pre-built icon modules, under Turbopack and webpack alike.
+export default withAlloy(nextConfig);
