@@ -1,5 +1,6 @@
 import type { TBClient } from './client/TBClient';
 import type { Collection, Field } from './client/types';
+import { forgetTeambridgeBindings, optionKey } from './bindings';
 
 /**
  * Declares the collections and fields an app depends on — its *slots* — and
@@ -93,7 +94,13 @@ export interface FieldSpec {
   createIfMissing?: boolean;
   /** Install: whether the app writes this field (the match must then be writable). Defaults to 'read'. */
   access?: 'read' | 'write';
-  /** Install, select fields: the options the app relies on, by name. */
+  /**
+   * Select fields: the options the app relies on, by name. Each is a slot of
+   * its own, keyed by `optionKey(name)` (`'Expiring soon'` → `expiring_soon`)
+   * and resolved in `resolved.collections.<collection>.options.<field>`: the
+   * option Teambridge's install bound, else the one option with that name.
+   * Install: matched or created with the field.
+   */
   options?: string[];
   /** Install, link fields: holds several records rather than one. Defaults to false. */
   multiple?: boolean;
@@ -141,6 +148,8 @@ export type SchemaBindings = {
     | {
         id?: string | null;
         fields?: { [fieldKey: string]: string | null | undefined };
+        /** Option ids by field key, then option key. Only Teambridge's bindings set these (see `./bindings`). */
+        options?: { [fieldKey: string]: { [optionKey: string]: string } | undefined };
       }
     | undefined;
 };
@@ -150,6 +159,13 @@ export interface ResolveSchemaOptions {
   bindings?: SchemaBindings | null;
   /** Reads of the account already made (`readAccountStructure`), to resolve from instead of reading again. */
   structure?: AccountStructure;
+  /**
+   * The app's slug in Teambridge, when Teambridge holds bindings for the
+   * account: its setup is then fixed in Teambridge's App Library rather than
+   * the app's own Settings, and issue messages say so. Set by
+   * `resolveAccountSchema`.
+   */
+  teambridgeSlug?: string | null;
 }
 
 /**
@@ -194,14 +210,28 @@ export type ResolvedSchema<S extends SchemaSpec> = {
       id: string | null;
       name: string;
       fields: { [F in keyof S[K]['fields']]: Field | null };
+      /**
+       * For each select field with `options` in the spec: option key →
+       * the option it resolved to, or null. Empty for the other fields.
+       */
+      options: { [F in keyof S[K]['fields']]?: Record<string, SelectOption | null> };
     };
   };
   issues: SchemaIssue[];
+  /**
+   * The app's slug in Teambridge when Teambridge holds this account's
+   * bindings, else null. Then setup is fixed in Teambridge's App Library
+   * (`appLibrarySetupPath` in `./host`), not on the app's own setup page.
+   */
+  teambridgeSlug: string | null;
 };
+
+/** One option of a select field. */
+export type SelectOption = NonNullable<Field['selectOptions']>[number];
 
 export interface SchemaIssue {
   /**
-   * `not-set`: no binding and no pinned id — needs a choice in the app's settings.
+   * `not-set`: no binding and no pinned id — needs a choice in setup (for an option: none bound, and none by that name).
    * `not-used`: the admin set the slot to "Not used" — a decision, not a problem.
    * `not-found`: the bound or pinned id no longer exists on the account.
    * `wrong-type`: the bound or pinned field is not one of the spec's types.
@@ -211,8 +241,10 @@ export interface SchemaIssue {
   blocking: boolean;
   /** The collection slot's label (`CollectionSpec.name`). */
   collection: string;
-  /** The field slot's label (`FieldSpec.name`), for field issues. */
+  /** The field slot's label (`FieldSpec.name`), for field and option issues. */
   field?: string;
+  /** The option's name, as the spec lists it, for option issues. */
+  option?: string;
   /** Plain-language description, safe to show an admin. */
   message: string;
 }
@@ -250,7 +282,16 @@ function bindingsKey(spec: SchemaSpec, bindings: SchemaBindings | undefined): st
     .map(([key, collectionSpec]) => {
       const binding = bindings?.[key];
       const fields = Object.keys(collectionSpec.fields)
-        .map((fieldKey) => `${fieldKey}=${pin(binding?.fields?.[fieldKey])}`)
+        .map((fieldKey) => {
+          const options = binding?.options?.[fieldKey];
+          const optionPins = options
+            ? Object.keys(options)
+                .sort()
+                .map((optionKey) => `${optionKey}>${options[optionKey]}`)
+                .join('+')
+            : '';
+          return `${fieldKey}=${pin(binding?.fields?.[fieldKey])}${optionPins ? `[${optionPins}]` : ''}`;
+        })
         .join(',');
       return `${key}=${pin(binding?.id)}:${fields}`;
     })
@@ -282,9 +323,10 @@ export function resolveSchema<S extends SchemaSpec>(
     );
   }
   const bindings = options.bindings ?? undefined;
+  const teambridgeSlug = options.teambridgeSlug || null;
   // Keyed by the spec's content, not its identity: every bundle has its own
   // copy of the `app/schema.ts` object, and they should share one entry.
-  const key = `${JSON.stringify(spec)}|${bindingsKey(spec, bindings)}`;
+  const key = `${JSON.stringify(spec)}|${bindingsKey(spec, bindings)}|${teambridgeSlug ?? ''}`;
   const cache = schemaCache();
   const now = Date.now();
   const cached = cache.get(accountId)?.get(key);
@@ -304,7 +346,7 @@ export function resolveSchema<S extends SchemaSpec>(
     entries = new Map();
     cache.set(accountId, entries);
   }
-  const value = resolveUncached(spec, bindings, options.structure ?? readAccountStructure(client));
+  const value = resolveUncached(spec, bindings, options.structure ?? readAccountStructure(client), teambridgeSlug);
   const entry: CacheEntry = { expiresAt: now + SCHEMA_TTL_MS, value };
   entries.set(key, entry);
   value.catch(() => {
@@ -324,11 +366,13 @@ export function resolveSchema<S extends SchemaSpec>(
  * they are part of the key. What this clears is the entry for *unchanged*
  * bindings — which would otherwise keep reporting a field as missing for up
  * to five minutes after an admin added it and saved the settings again —
- * and, on a deployment without a database, the account's cached guess.
+ * and, on a deployment without a database, the account's cached guess. It
+ * also forgets the account's cached Teambridge bindings (`./bindings`).
  */
 export function invalidateSchema(accountId: string): void {
   schemaCache().delete(accountId);
   guessCache().delete(accountId);
+  forgetTeambridgeBindings(accountId);
 }
 
 type GuessEntry = { expiresAt: number; bindings: Promise<SchemaBindings> };
@@ -353,7 +397,8 @@ function guessCache(): GuessCache {
  */
 export async function resolveByGuess<S extends SchemaSpec>(
   client: TBClient,
-  spec: S
+  spec: S,
+  options: { existing?: SchemaBindings | null; teambridgeSlug?: string | null } = {}
 ): Promise<ResolvedSchema<S>> {
   const accountId = client.accountId;
   if (!accountId) {
@@ -361,12 +406,15 @@ export async function resolveByGuess<S extends SchemaSpec>(
       'resolveByGuess needs a client that names its account. Build it with getTBClient({ accountId }).'
     );
   }
-  const key = JSON.stringify(spec);
+  // Teambridge's bindings, when it holds any, are what the guess starts from.
+  const existing = options.existing ?? undefined;
+  const teambridgeSlug = options.teambridgeSlug;
+  const key = `${JSON.stringify(spec)}|${bindingsKey(spec, existing)}`;
   const cache = guessCache();
   const now = Date.now();
   const cached = cache.get(accountId)?.get(key);
   if (cached && cached.expiresAt > now) {
-    return resolveSchema(client, spec, { bindings: await cached.bindings });
+    return resolveSchema(client, spec, { bindings: await cached.bindings, teambridgeSlug });
   }
 
   for (const [cachedAccountId, entries] of cache) {
@@ -383,7 +431,7 @@ export async function resolveByGuess<S extends SchemaSpec>(
   }
   // The guess and the resolution read the same lists; share them.
   const structure = readAccountStructure(client);
-  const bindings = guessBindings(client, spec, undefined, structure);
+  const bindings = guessBindings(client, spec, existing, structure);
   const entry: GuessEntry = { expiresAt: now + SCHEMA_TTL_MS, bindings };
   entries.set(key, entry);
   const forget = () => {
@@ -392,7 +440,7 @@ export async function resolveByGuess<S extends SchemaSpec>(
   };
   bindings.catch(forget);
 
-  const resolved = await resolveSchema(client, spec, { bindings: await bindings, structure });
+  const resolved = await resolveSchema(client, spec, { bindings: await bindings, structure, teambridgeSlug });
   if (!resolved.ready) forget();
   return resolved;
 }
@@ -411,35 +459,52 @@ function pinFor(bound: string | null | undefined, specId: string | undefined): P
 async function resolveUncached<S extends SchemaSpec>(
   spec: S,
   bindings: SchemaBindings | undefined,
-  structure: AccountStructure
+  structure: AccountStructure,
+  teambridgeSlug: string | null
 ): Promise<ResolvedSchema<S>> {
   const issues: SchemaIssue[] = [];
   const allCollections = await structure.collections();
+  // Where an admin fixes an unresolved slot, for the messages.
+  const where = teambridgeSlug ? "the app's setup in Teambridge" : "the app's settings";
 
   const entries = await Promise.all(
     Object.entries(spec).map(async ([key, collectionSpec]) => {
       const collectionRequired = collectionSpec.required ?? true;
       const binding = bindings?.[key];
       const fields: Record<string, Field | null> = {};
+      const options: Record<string, Record<string, SelectOption | null>> = {};
 
-      const collection = findCollection(allCollections, collectionSpec, binding?.id, issues, collectionRequired);
+      const collection = findCollection(allCollections, collectionSpec, binding?.id, issues, collectionRequired, where);
       if (!collection) {
         for (const fieldKey of Object.keys(collectionSpec.fields)) fields[fieldKey] = null;
-        return [key, { id: null, name: collectionSpec.name, fields }] as const;
+        return [key, { id: null, name: collectionSpec.name, fields, options }] as const;
       }
 
       const available = await structure.fields(collection.id);
       for (const [fieldKey, fieldSpec] of Object.entries(collectionSpec.fields)) {
-        fields[fieldKey] = findField(
+        const field = findField(
           available,
           collectionSpec.name,
           fieldSpec,
           binding?.fields?.[fieldKey],
           issues,
-          collectionRequired
+          collectionRequired,
+          where
         );
+        fields[fieldKey] = field;
+        if (field && fieldSpec.options?.length) {
+          options[fieldKey] = findOptions(
+            field,
+            collectionSpec.name,
+            fieldSpec,
+            binding?.options?.[fieldKey],
+            issues,
+            collectionRequired,
+            where
+          );
+        }
       }
-      return [key, { id: collection.id, name: collection.name, fields }] as const;
+      return [key, { id: collection.id, name: collection.name, fields, options }] as const;
     })
   );
 
@@ -447,6 +512,7 @@ async function resolveUncached<S extends SchemaSpec>(
     ready: !issues.some((issue) => issue.blocking),
     collections: Object.fromEntries(entries) as ResolvedSchema<S>['collections'],
     issues,
+    teambridgeSlug,
   };
 }
 
@@ -455,7 +521,8 @@ function findCollection(
   spec: CollectionSpec,
   bound: string | null | undefined,
   issues: SchemaIssue[],
-  required: boolean
+  required: boolean,
+  where: string
 ): Collection | null {
   const label = spec.name;
   if (bound === null) {
@@ -473,7 +540,7 @@ function findCollection(
       kind: 'not-set',
       blocking: required,
       collection: label,
-      message: `No collection is set for "${label}" yet. Choose one in the app's settings.`,
+      message: `No collection is set for "${label}" yet. Choose one in ${where}.`,
     });
     return null;
   }
@@ -485,8 +552,8 @@ function findCollection(
       collection: label,
       message:
         pin.source === 'bindings'
-          ? `The collection set for "${label}" in the app's settings no longer exists. Choose another.`
-          : `No collection on this account has the id pinned for "${label}" (${pin.id}). Choose one in the app's settings.`,
+          ? `The collection set for "${label}" in ${where} no longer exists. Choose another.`
+          : `No collection on this account has the id pinned for "${label}" (${pin.id}). Choose one in ${where}.`,
     });
     return null;
   }
@@ -499,7 +566,8 @@ function findField(
   spec: FieldSpec,
   bound: string | null | undefined,
   issues: SchemaIssue[],
-  collectionRequired: boolean
+  collectionRequired: boolean,
+  where: string
 ): Field | null {
   const blocking = collectionRequired && Boolean(spec.required);
   const slot = `${collectionLabel} → ${spec.name}`;
@@ -512,7 +580,7 @@ function findField(
   }
   const pin = pinFor(bound, spec.id);
   if (!pin) {
-    issue('not-set', `No field is set for "${slot}" yet. Choose one in the app's settings.`);
+    issue('not-set', `No field is set for "${slot}" yet. Choose one in ${where}.`);
     return null;
   }
   const field = available.find((f) => f.id === pin.id);
@@ -520,8 +588,8 @@ function findField(
     issue(
       'not-found',
       pin.source === 'bindings'
-        ? `The field set for "${slot}" in the app's settings no longer exists. Choose another.`
-        : `No field on this collection has the id pinned for "${slot}" (${pin.id}). Choose one in the app's settings.`
+        ? `The field set for "${slot}" in ${where} no longer exists. Choose another.`
+        : `No field on this collection has the id pinned for "${slot}" (${pin.id}). Choose one in ${where}.`
     );
     return null;
   }
@@ -533,6 +601,49 @@ function findField(
     return null;
   }
   return field;
+}
+
+/**
+ * The options of a resolved select field that the spec lists, by option key:
+ * the option Teambridge bound, else the one option with the spec's name. The
+ * app's own setup page has no picker for options, so a name is how an
+ * account that Teambridge holds nothing for finds them. Unresolved options
+ * are reported like their field, and block when it does.
+ */
+function findOptions(
+  field: Field,
+  collectionLabel: string,
+  spec: FieldSpec,
+  bound: { [optionKey: string]: string } | undefined,
+  issues: SchemaIssue[],
+  collectionRequired: boolean,
+  where: string
+): Record<string, SelectOption | null> {
+  const blocking = collectionRequired && Boolean(spec.required);
+  const available = field.selectOptions ?? [];
+  const resolved: Record<string, SelectOption | null> = {};
+  for (const label of spec.options ?? []) {
+    const key = optionKey(label);
+    const boundId = bound?.[key];
+    const option = boundId
+      ? (available.find((candidate) => candidate.id === boundId) ?? null)
+      : uniqueByName(available, label);
+    resolved[key] = option;
+    if (!option) {
+      const slot = `${collectionLabel} → ${spec.name} → ${label}`;
+      issues.push({
+        kind: boundId ? 'not-found' : 'not-set',
+        blocking,
+        collection: collectionLabel,
+        field: spec.name,
+        option: label,
+        message: boundId
+          ? `The option set for "${slot}" in ${where} no longer exists. Choose another.`
+          : `"${field.name}" has no option called "${label}". Add it, or choose one in ${where}.`,
+      });
+    }
+  }
+  return resolved;
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -618,7 +729,7 @@ export async function guessBindings<S extends SchemaSpec>(
         if (field) fields[fieldKey] = field.id;
       }
     }
-    bindings[key] = { id: collectionId, fields };
+    bindings[key] = { id: collectionId, fields, ...(current?.options ? { options: current.options } : {}) };
   }
   return bindings;
 }

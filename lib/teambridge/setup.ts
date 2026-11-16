@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import type { TBClient } from './client/TBClient';
-import { configStore } from './config-store';
+import type { AppBindings } from './client/types';
+import { loadTeambridgeBindings, mergeBindings } from './bindings';
+import { configStore, type AccountConfig } from './config-store';
 import {
   guessBindings,
   invalidateSchema,
@@ -16,8 +18,17 @@ import {
 
 /**
  * The setup gate: resolve the app's schema for an account with the account's
- * saved bindings, and send the user to the setup page while a required slot
- * is still unresolved.
+ * bindings, and send the user to the setup page while a required slot is
+ * still unresolved.
+ *
+ * An account's bindings come from Teambridge first: what the admin mapped
+ * each manifest requirement to when installing the app (`./bindings`). The
+ * app's own saved bindings, the spec's pinned ids and the first-contact guess
+ * by name fill what Teambridge doesn't hold, which for an account installed
+ * before Teambridge recorded bindings (or a dev client) is everything. When
+ * Teambridge holds bindings for the account, its setup is fixed in
+ * Teambridge's App Library: the setup page then links there instead of
+ * showing its own pickers.
  *
  * Installing an app makes it active at once, so a user can open it before an
  * admin has bound the app's slots to the account's collections and fields.
@@ -67,16 +78,21 @@ export function settingsEnabled(): boolean {
 }
 
 /**
- * Resolve `spec` for the client's account, applying the bindings saved for
- * that account. Same caching as `resolveSchema`. Use the app's own access
- * (`getTBClient({ accountId })`): the schema is account structure, not user
- * data.
+ * Resolve `spec` for the client's account. Same caching as `resolveSchema`.
+ * Use the app's own access (`getTBClient({ accountId })`): the schema is
+ * account structure, not user data.
  *
- * On first contact with an account — no config saved yet, which is the
- * install hook's call or, for an account the hook never reached, its first
- * request — it initializes the account first (see `initializeAccount`).
- * Without Settings (`settingsEnabled`) nothing is saved: every account
- * resolves from the guess, made afresh (`resolveByGuess`).
+ * Bindings apply slot by slot, first match wins (`mergeBindings`):
+ * Teambridge's, then the ones saved for the account in the config store,
+ * then the id pinned in the spec. On first contact with an account — no
+ * bindings saved yet, which is the install hook's call or, for an account the
+ * hook never reached, its first request — the slots still unset are guessed
+ * by name and saved (see `initializeAccount`). Without Settings
+ * (`settingsEnabled`) nothing is saved: the guess is made afresh
+ * (`resolveByGuess`), starting from Teambridge's bindings.
+ *
+ * `resolved.teambridgeSlug` says whether Teambridge holds bindings for the
+ * account, and so where its setup is fixed.
  */
 export async function resolveAccountSchema<S extends SchemaSpec>(
   client: TBClient,
@@ -87,26 +103,58 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
       'resolveAccountSchema needs a client that names its account. Build it with getTBClient({ accountId }).'
     );
   }
-  if (!settingsEnabled()) return resolveByGuess(client, spec);
+  const config = settingsEnabled() ? await configStore.get(client.accountId) : null;
+  const teambridge = await teambridgeBindings(client, config);
+  const teambridgeSlug = teambridgeSetupSlug(teambridge);
+  const fromTeambridge = mergeBindings(spec, teambridge.bindings, null);
+  if (!settingsEnabled()) return resolveByGuess(client, spec, { existing: fromTeambridge, teambridgeSlug });
 
-  const config = await configStore.get(client.accountId);
-  if (config) return resolveSchema(client, spec, { bindings: config.bindings });
+  if (config?.bindings) {
+    const bindings = mergeBindings(spec, teambridge.bindings, config.bindings);
+    return resolveSchema(client, spec, { bindings, teambridgeSlug });
+  }
 
   // First contact. The guess reads the account's collections and the fields
   // of the ones it matches; the resolution that follows reads the same
   // lists, so hand it what the guess read instead of reading them twice.
   const structure = readAccountStructure(client);
-  const bindings = await initializeAccount(client, spec, structure);
-  return resolveSchema(client, spec, { bindings, structure });
+  const saved = await initializeAccount(client, spec, structure, fromTeambridge);
+  const bindings = mergeBindings(spec, teambridge.bindings, saved);
+  return resolveSchema(client, spec, { bindings, structure, teambridgeSlug });
+}
+
+/** Teambridge's bindings for the account, reread whenever the install hook has recorded a newer setup. */
+function teambridgeBindings(client: TBClient, config: AccountConfig | null): Promise<AppBindings> {
+  return loadTeambridgeBindings(client, config?.teambridgeSetup?.reviewedAt);
+}
+
+/** The app's slug in Teambridge when Teambridge holds bindings for the account, else null. */
+function teambridgeSetupSlug(teambridge: AppBindings): string | null {
+  if (Object.keys(teambridge.bindings).length === 0) return null;
+  return teambridge.slug ?? process.env.APP_SLUG ?? null;
 }
 
 /**
- * First contact with an account: make the good-faith guess at its bindings
- * by name (`guessBindings`) and save it, so an account whose collections
- * carry the expected names works at once and the rest start setup with the
- * obvious slots filled. Idempotent: the same account guesses the same way,
- * and once a config exists it is never guessed over — an admin's choices in
- * Settings, including "Not used", stay. Returns what was saved.
+ * Whether the account's setup is fixed in Teambridge, and under which slug:
+ * non-null when Teambridge holds bindings for it. The setup page asks before
+ * deciding what to show.
+ */
+export async function teambridgeSetupFor(client: TBClient): Promise<string | null> {
+  if (!client.accountId) throw new Error('teambridgeSetupFor needs a client that names its account.');
+  const config = settingsEnabled() ? await configStore.get(client.accountId) : null;
+  return teambridgeSetupSlug(await teambridgeBindings(client, config));
+}
+
+/**
+ * First contact with an account: make the good-faith guess by name
+ * (`guessBindings`) at every slot `existing` (Teambridge's bindings) leaves
+ * unset, and save it, so an account whose collections carry the expected
+ * names works at once and the rest start setup with the obvious slots
+ * filled. Field slots Teambridge holds are not saved: they stay Teambridge's,
+ * so an admin who later skips one there unbinds it here too. Idempotent: the
+ * same account guesses the same way, and once bindings are saved they are
+ * never guessed over — an admin's choices in Settings, including "Not used",
+ * stay. Returns what was saved.
  *
  * Pass the `structure` the caller will resolve with so the guess and the
  * resolution share their reads; without one the guess reads on its own.
@@ -114,14 +162,53 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
 export async function initializeAccount<S extends SchemaSpec>(
   client: TBClient,
   spec: S,
-  structure: AccountStructure = readAccountStructure(client)
+  structure: AccountStructure = readAccountStructure(client),
+  existing?: SchemaBindings | null
 ): Promise<SchemaBindings> {
   const accountId = client.accountId;
   if (!accountId) throw new Error('initializeAccount needs a client that names its account.');
-  const bindings = await guessBindings(client, spec, undefined, structure);
-  await configStore.set(accountId, { bindings, updatedAt: new Date().toISOString() });
+  const guessed = await guessBindings(client, spec, existing, structure);
+  const bindings: SchemaBindings = {};
+  for (const [key, binding] of Object.entries(guessed)) {
+    if (!binding) continue;
+    const held = existing?.[key]?.fields ?? {};
+    const fields = Object.fromEntries(Object.entries(binding.fields ?? {}).filter(([fieldKey]) => !(fieldKey in held)));
+    bindings[key] = { ...(binding.id !== undefined ? { id: binding.id } : {}), fields };
+  }
+  const current = await configStore.get(accountId);
+  await configStore.set(accountId, { ...current, bindings, updatedAt: new Date().toISOString() });
   invalidateSchema(accountId);
   return bindings;
+}
+
+/**
+ * Record an install, or a re-review of the app's setup, in Teambridge (the
+ * install hook calls it), and forget the account's cached schema. Every
+ * server instance rereads Teambridge's bindings on its next request for the
+ * account, not just the one that received the hook. Does nothing without
+ * Settings: there is nowhere durable to record it.
+ */
+export async function recordTeambridgeSetup(accountId: string, manifestVersion?: string): Promise<void> {
+  if (settingsEnabled()) {
+    const current = await configStore.get(accountId);
+    await configStore.set(accountId, {
+      ...current,
+      teambridgeSetup: { reviewedAt: new Date().toISOString(), ...(manifestVersion ? { manifestVersion } : {}) },
+    });
+  }
+  invalidateSchema(accountId);
+}
+
+/**
+ * Where to send an admin for `resolved`: the setup page while a required slot
+ * is unresolved and there is a setup to finish — the app's own (with
+ * Settings) or Teambridge's (when it holds the account's bindings; the page
+ * then links there). Undefined otherwise. The gate redirects to it, and the
+ * install hook returns it as `setupPath`.
+ */
+export function setupPathFor(resolved: Pick<ResolvedSchema<SchemaSpec>, 'ready' | 'teambridgeSlug'>): string | undefined {
+  if (resolved.ready) return undefined;
+  return settingsEnabled() || resolved.teambridgeSlug ? SETUP_PATH : undefined;
 }
 
 /**
@@ -130,9 +217,9 @@ export async function initializeAccount<S extends SchemaSpec>(
  * setup page instead of a page that can't work. So what it returns is always
  * ready: every required field is there.
  *
- * Without Settings (`settingsEnabled`) there is no page to send anyone to,
- * and nothing anyone using the app could do, so it throws
- * `SchemaNotReadyError` instead. The page fails like it fails for any other
+ * Without Settings (`settingsEnabled`), and with no bindings in Teambridge,
+ * there is no setup to send anyone to, and nothing anyone using the app could
+ * do, so it throws `SchemaNotReadyError` instead. The page fails like it fails for any other
  * load error, and the error's message, in the server log, says what is
  * missing and why.
  *
@@ -148,7 +235,7 @@ export async function requireSetup<S extends SchemaSpec>(
 ): Promise<ResolvedSchema<S>> {
   const resolved = await resolveAccountSchema(client, spec);
   if (!resolved.ready) {
-    if (settingsEnabled()) redirect(options.setupPath ?? SETUP_PATH);
+    if (setupPathFor(resolved)) redirect(options.setupPath ?? SETUP_PATH);
     throw new SchemaNotReadyError(client.accountId ?? '', resolved.issues);
   }
   return resolved;

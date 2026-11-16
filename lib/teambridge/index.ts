@@ -25,7 +25,7 @@ export type { TBAppCredentials } from './middleware';
 export { TBProvider, useTBContext, getTBContext } from './context';
 
 // Router (URL sync with parent iframe host, host record detail panel)
-export { TBRouter, TBRecordLink, TBRecordEditWatcher, useOpenRecord, isRecordId } from './router';
+export { TBRouter, TBRecordLink, TBRecordEditWatcher, TBHostLink, useOpenRecord, isRecordId } from './router';
 
 // Client
 export { TBClient, TBApiError, getTBClient } from './client';
@@ -53,6 +53,7 @@ export type {
   Location,
   Timezone,
   Document,
+  AppBindings,
   DocumentUploadOptions,
 } from './client';
 
@@ -70,12 +71,18 @@ export { invalidateNames, lookupNames, nameFrom } from './lookup';
 export type { LookupNamesOptions } from './lookup';
 export {
   initializeAccount,
+  recordTeambridgeSetup,
   requireSetup,
   resolveAccountSchema,
   SchemaNotReadyError,
   settingsEnabled,
+  setupPathFor,
   SETUP_PATH,
+  teambridgeSetupFor,
 } from './setup';
+
+// Teambridge's bindings for an account (also at `@/lib/teambridge/bindings`).
+export { loadTeambridgeBindings, mergeBindings, optionKey } from './bindings';
 
 // URL + fetch helpers live at their own sub-paths so they're importable from
 // Client Components without pulling the rest of the barrel — which includes

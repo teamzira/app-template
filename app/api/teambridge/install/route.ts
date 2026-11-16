@@ -1,10 +1,21 @@
-import { getTBClient, handleTBInstall, resolveAccountSchema, settingsEnabled, SETUP_PATH } from '@/lib/teambridge';
-import { invalidateSchema } from '@/lib/teambridge/schema';
+import {
+  getTBClient,
+  handleTBInstall,
+  recordTeambridgeSetup,
+  resolveAccountSchema,
+  settingsEnabled,
+  setupPathFor,
+  SETUP_PATH,
+} from '@/lib/teambridge';
 import { schema } from '@/app/schema';
 import manifest from '@/teambridge.manifest';
 
 /**
- * Teambridge calls this when an admin installs the app on an account.
+ * Teambridge calls this when an admin installs the app on an account, and
+ * again when an admin re-reviews an installed app's setup in the App Library.
+ * Either way the account's bindings in Teambridge may have changed, so it
+ * records the review (with the manifest version it went through) and drops
+ * the account's cached schema before resolving it again.
  *
  * It is advisory: the installation is active, and the app's one set of
  * credentials already covers the account, whether or not this succeeds. Keep
@@ -14,13 +25,14 @@ import manifest from '@/teambridge.manifest';
  * every page covers accounts that never got the hook.
  *
  * Returning `setupPath` makes Teambridge open the app at that path right
- * after install. Only do that when the account needs it. On first contact
- * `resolveAccountSchema` guesses the account's bindings by name and saves
- * them, so an account whose collections carry the expected names (or that
- * still has bindings from an earlier install) lands on the app itself; the
- * rest open setup with the obvious slots already filled. A deployment
- * without Settings (no database in production) never asks: there is no
- * setup page to open.
+ * after install. Only do that when the account needs it (`setupPathFor`).
+ * The admin has usually just mapped every requirement in Teambridge, so the
+ * app opens on itself. For the rest, `resolveAccountSchema` guesses unset
+ * slots by name on first contact and saves them; an account still missing a
+ * required slot opens setup, which links back to Teambridge's App Library
+ * when Teambridge holds the account's bindings. A deployment without Settings
+ * (no database in production) and no bindings in Teambridge never asks:
+ * there is no setup to open.
  */
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET!, manifest },
@@ -34,12 +46,12 @@ export const POST = handleTBInstall(
       );
     }
 
-    // Look at the account as it is now, not as it was before a reinstall.
-    invalidateSchema(accountId);
     try {
-      // First contact guesses and saves bindings by name; see lib/teambridge/setup.ts.
+      // Look at the account as it is now, not as it was before this review.
+      await recordTeambridgeSetup(accountId, manifestVersion);
+      // Teambridge's bindings first; first contact guesses and saves the rest by name. See lib/teambridge/setup.ts.
       const resolved = await resolveAccountSchema(getTBClient({ accountId }), schema);
-      return { success: true, setupPath: resolved.ready || !settingsEnabled() ? undefined : SETUP_PATH };
+      return { success: true, setupPath: setupPathFor(resolved) };
     } catch (e) {
       // Don't fail the install over a lookup. Send the installer to setup,
       // where the page reports what's wrong, if there is one.

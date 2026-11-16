@@ -1,3 +1,4 @@
+import { optionKey } from './bindings';
 import type { CollectionSpec, SchemaSpec, StandardCollection } from './schema';
 
 /**
@@ -130,15 +131,6 @@ const STANDARD_LABELS: Record<StandardCollection, string> = {
   pay_periods: 'Pay Periods',
 };
 
-/** `Expiring soon` → `expiring_soon`, for option keys. */
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
 /**
  * Converts an app manifest to the install service's `RequirementManifest`.
  * Throws with every problem at once, so a bad spec is fixed in one pass.
@@ -220,7 +212,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         }
       }
 
-      const options = (field.options ?? []).map((label) => ({ key: `${key}.${slugify(label)}`, label }));
+      const options = (field.options ?? []).map((label) => ({ key: `${key}.${optionKey(label)}`, label }));
       const optionKeys = options.map((option) => option.key);
       const constraints: FieldConstraint[] = [];
       if (field.access === 'write') constraints.push('WRITABLE');

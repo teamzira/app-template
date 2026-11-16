@@ -29,7 +29,7 @@ import {
   TBRecordLink,
   type Field,
 } from '@/lib/teambridge';
-import { readIds, type SchemaIssue } from '@/lib/teambridge/schema';
+import { readIds, type ResolvedSchema, type SchemaSpec } from '@/lib/teambridge/schema';
 import { SetupNotice } from '@/components/setup-notice';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -75,7 +75,7 @@ export default async function Home({
 
   const credentials = getAppCredentials();
   let error: string | null = null;
-  let setupIssues: SchemaIssue[] = [];
+  let setup: Pick<ResolvedSchema<SchemaSpec>, 'issues' | 'teambridgeSlug'> = { issues: [], teambridgeSlug: null };
   let allShifts: MappedShift[] = [];
   let totalShiftCount = 0;
   const userNames: Record<string, string> = {};
@@ -84,18 +84,18 @@ export default async function Home({
   if (credentials) {
     try {
       // Schema first. `requireSetup` resolves it with the app's own access
-      // (account structure, cached per account) from the choices saved for
-      // this account in Settings, and sends the user to /setup/ while a
-      // required collection or field is unresolved — so past this line every
-      // required field is there. (A deployment without a database has no
-      // Settings to send anyone to; there it throws, and the catch below
-      // shows the usual error.) What's left in `issues` is non-blocking: an
+      // (account structure, cached per account) from the account's bindings —
+      // Teambridge's from the install, then the choices saved in Settings —
+      // and sends the user to /setup/ while a required collection or field is
+      // unresolved, so past this line every required field is there. (With no
+      // setup to send anyone to — no database, and nothing in Teambridge —
+      // it throws, and the catch below shows the usual error.) What's left in `issues` is non-blocking: an
       // optional slot nobody has set yet, or one whose field was deleted.
       // Those get a notice and the feature degrades. Records are then read
       // as the current user (`ctx.userContext`), so Teambridge applies their
       // permissions.
       const resolved = await requireSetup(getTBClient({ accountId }), schema);
-      setupIssues = resolved.issues;
+      setup = resolved;
       const client = getTBClient(ctx);
       const shifts = resolved.collections.shifts;
       const { start, end, assignee, published } = shifts.fields;
@@ -238,7 +238,7 @@ export default async function Home({
             </Alert>
           ) : (
             <div className="space-y-4">
-              <SetupNotice issues={setupIssues} />
+              <SetupNotice resolved={setup} />
               {filteredShifts.length > 0 ? (
                 <Table>
                   <TableHeader>
