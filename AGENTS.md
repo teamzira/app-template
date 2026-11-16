@@ -346,7 +346,7 @@ const resolved = await requireSetup(getTBClient({ accountId }), schema); // the 
 const start = resolved.collections.shifts.fields.start; // Field; required, so never null here
 ```
 
-- **Ids resolve, names guess.** A slot resolves from the id bound to it for the account, or from the `id` pinned in the spec as the default; the resolver never looks a collection or field up by name. Names are used once, by `guessBindings`, to make a good-faith first guess at an account's bindings (the one collection or field with the slot's name and type), which is saved as ids. After that a rename in Teambridge ("Location" becomes "Facility") changes nothing. Every account has different ids, so pin them only in an app built for one account; other accounts get the guess and correct it in setup (see "Per-account configuration").
+- **Ids resolve, names guess.** A slot resolves from the id bound to it for the account (what the admin mapped in Teambridge when installing the app, else what was saved in the app's Settings), or from the `id` pinned in the spec as the default; the resolver never looks a collection or field up by name. Names are used once, by `guessBindings`, to make a good-faith first guess at an account's bindings (the one collection or field with the slot's name and type), which is saved as ids. After that a rename in Teambridge ("Location" becomes "Facility") changes nothing. Every account has different ids, so pin them only in an app built for one account; other accounts get the guess and correct it in setup (see "Per-account configuration").
 - **Keys are forever.** The spec keys (`shifts`, `start`) are the app's names for these things, and they are the requirement keys every installed account's mapping is stored under (see "Install manifest"). Rename the `name` freely; don't rename a key.
 - **Give every slot a `type`.** The setup page offers only fields of that type, which is also what tells apart two fields sharing a name (a BOOLEAN and a MULTI_SELECT both called "Affiliate Vendor"), and a bound or pinned field of another type is rejected (`wrong-type`). A slot without a type offers every field.
 - **Name slots the way the account does.** The name is what the guess looks for and what the admin sees next to the picker, so look at a real field list before choosing it: "Roles", not "role"; "Location", not "facility". A slot that is unresolved is always `null`, so every read of it silently yields nothing; the resolver reports it in `issues` instead.
@@ -357,7 +357,7 @@ const start = resolved.collections.shifts.fields.start; // Field; required, so n
 Accounts differ, so plan for the one that lacks a field the app wants:
 
 1. Mark it `required: true` only if the app truly can't work without it. Otherwise leave it optional and degrade the feature that uses it: hide the column, disable the action.
-2. Pages call `requireSetup()` first (see "Per-account configuration"). While a required slot is unresolved it sends the user to the setup page, where an admin binds the slot to whichever collection or field their account has for it, whatever it is called. Non-blocking issues stay in `resolved.issues`: render `<SetupNotice issues={resolved.issues} />` (`components/setup-notice.tsx`) and degrade.
+2. Pages call `requireSetup()` first (see "Per-account configuration"). While a required slot is unresolved it sends the user to the setup page, where an admin binds the slot to whichever collection or field their account has for it, whatever it is called (or, when Teambridge holds the account's bindings, follows the link to the app's setup in Teambridge's App Library). Non-blocking issues stay in `resolved.issues`: render `<SetupNotice resolved={resolved} />` (`components/setup-notice.tsx`) and degrade.
 3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values. The setup page lets an admin pick any field of the right type; it can't create one. Teambridge's install review can, for a slot marked `createIfMissing`.
 4. Give the spec entry what an installer needs — `purpose`, `synonyms`, and `createIfMissing: true` for a field it's fine to add — so the install flow can find it under another name or offer to create it (see "Install manifest").
 
@@ -400,15 +400,15 @@ A link field's target collection is added automatically (`std.user` for a `LINK_
 
 **Teambridge reads it from the app.** `app/api/teambridge/manifest/route.ts` serves the same JSON at `GET /api/teambridge/manifest`. Teambridge fetches it when the app is registered or updated, so nobody pastes it in by hand. The request is signed with the app's webhook secret (`X-TB-Timestamp`, plus `X-TB-Signature` = hex HMAC-SHA256 of `"<timestamp>.manifest"`). The response carries `ETag: "<manifestHash>"` and answers 304 when nothing changed. In dev mode it's served unsigned, so `curl localhost:3000/api/teambridge/manifest/` gives you JSON to paste into the install lab. Keep the route: it's part of the template, like the install webhook.
 
-**Knowing which manifest an account has.** The install webhook's context carries `manifestVersion`, the hash of the manifest that account was installed against. Give `handleTBInstall` the app's `manifest` (the template's install route does), and `context.manifestOutdated` says whether that account is behind the app's current one. Teambridge doesn't send `manifestVersion` yet, so both stay undefined until it does.
+**Knowing which manifest an account has.** When an install, or a re-review of an installed app's setup, went through a manifest, the install webhook carries `manifestVersion`: the ETag the app served, unquoted. Give `handleTBInstall` the app's `manifest` (the template's install route does), and `context.manifestOutdated` says whether that account is behind the app's current one. The template's hook records it in the account's config (`teambridgeSetup`, via `recordTeambridgeSetup`). Accounts installed without a manifest send none, and both stay undefined.
 
 **Workflows.** `workflows` lists workflow templates (by template-library slug) to install with the app. The manifest records them now; the install service will offer them in the same install once it supports that.
 
-**The app doesn't read the install's mapping back yet.** It resolves from its own bindings (see "Per-account configuration"), whose first guess matches by `name` only, so `synonyms` don't help it — keep `name` equal to what the account calls the field.
+**The app resolves from the install's mapping.** Teambridge stores the admin's answers per account under the app's slug, keyed by requirement key, and the app reads them back with `client.apps.getBindings()` (`GET /v1/apps/self/bindings`, with the app's own access; a 404, for a client that isn't a registered app, is no bindings). `resolveAccountSchema` applies them first, slot by slot (see "Per-account configuration" → "How bindings and pinned ids interact"), so `synonyms` and renames work for installed accounts. An account installed before Teambridge recorded bindings gets `{}` and falls back to the app's own Settings and the guess by name, which matches `name` only — so keep `name` equal to what most accounts call the field.
 
 ### Collection name matching
 
-Name matching lives in one place: `guessBindings` in `lib/teambridge/schema.ts`, which makes the first guess at an account's bindings and whose result is saved as ids. Don't add lookups like `collections.find((c) => c.name === 'Shifts')` elsewhere in app code: they break on the first account that calls it something else, and `includes()` grabs `"Shifts Group"` or `"Archived Users"`, whichever comes first. Collections and fields come from the resolved schema (`requireSetup` / `resolveAccountSchema`).
+Name matching lives in one place: `lib/teambridge/schema.ts` — `guessBindings`, which makes the first guess at an account's bindings and whose result is saved as ids, and the fallback for select options Teambridge doesn't hold. Don't add lookups like `collections.find((c) => c.name === 'Shifts')` elsewhere in app code: they break on the first account that calls it something else, and `includes()` grabs `"Shifts Group"` or `"Archived Users"`, whichever comes first. Collections and fields come from the resolved schema (`requireSetup` / `resolveAccountSchema`).
 
 The guess itself is deliberately strict — exact, case-insensitive equality, filtered by the slot's type, and only when exactly one candidate matches. Two collections named "Shifts" means no guess, and the admin chooses:
 
@@ -504,14 +504,15 @@ Every Teambridge read is a network round trip from the app server, and the host 
 
 ## Per-account configuration
 
-Accounts differ: the collection this app calls "Shifts" may be "Rota" on one account, and its "Start Time" a field called "Shift Start". So the app declares slots, makes a good-faith guess at them by name once, and from then on works from the ids each account has bound. The template ships that flow, generic over `app/schema.ts`:
+Accounts differ: the collection this app calls "Shifts" may be "Rota" on one account, and its "Start Time" a field called "Shift Start". So the app declares slots, and works from the ids each account has bound to them: mapped in Teambridge when the app was installed, or else chosen in the app's own Settings after a good-faith guess by name. The template ships that flow, generic over `app/schema.ts`:
 
-- `app/schema.ts` declares the app's **slots**: each collection and field it reads or writes, with a `name`, a `type`, and whether it is `required`.
-- On **first contact** with an account (the install hook, or its first request if the hook never came) `resolveAccountSchema` runs `guessBindings`: each slot gets the one collection or field with its name and type, and the result is saved as ids. An account whose collections carry the expected names works without a visit to setup.
+- `app/schema.ts` declares the app's **slots**: each collection and field it reads or writes, with a `name`, a `type`, and whether it is `required`. It is also the app's install manifest.
+- **Teambridge's bindings** come first. Installing the app (or re-reviewing its setup in the App Library) has an admin map each manifest requirement to the account's own collection, field or option, and `resolveAccountSchema` reads the answers back (`lib/teambridge/bindings.ts`), cached per account. Everything below is the fallback, for what Teambridge doesn't hold: accounts installed before it recorded bindings, skipped optional requirements, and dev mode, whose client usually isn't a registered app.
+- On **first contact** with an account (the install hook, or its first request if the hook never came) `resolveAccountSchema` runs `guessBindings` for the slots Teambridge doesn't hold: each gets the one collection or field with its name and type, and the result is saved as ids. An account whose collections carry the expected names works without a visit to setup.
 - `/setup/` (`app/setup/`) lets an admin **bind** each slot to a collection and field on their account. Pickers offer only fields of the slot's `type`, and anything not set yet arrives prefilled with the same guess, marked once at the top of the form rather than under every field. Saving validates by resolving the schema with the new bindings, stores them, and opens the app.
 - The **config store** (`lib/teambridge/config-store.ts`) keeps the bindings per account, behind a small interface: in Postgres when `DATABASE_URL` is set (the Neon integration), in memory otherwise, for development. See "The config store".
-- `requireSetup()` (`lib/teambridge/setup.ts`) is the **gate** every page calls: it resolves the schema with the account's bindings and redirects to `/setup/` while a required slot is unresolved.
-- The **install hook** returns `setupPath: '/setup/'` only when a required slot is still unresolved after the guess, so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config.
+- `requireSetup()` (`lib/teambridge/setup.ts`) is the **gate** every page calls: it resolves the schema with the account's bindings and redirects to `/setup/` while a required slot is unresolved. When Teambridge holds the account's bindings (`resolved.teambridgeSlug`), `/setup/` shows what is unresolved and links to the app's setup in Teambridge's App Library (`appLibrarySetupPath(slug)` in `lib/teambridge/host.ts`, `/apps/library?setup=<slug>`) instead of its own pickers, and `SetupNotice` links there too. The link is a `TBHostLink`: the host's origin isn't the proxy's, and the host sandboxes the iframe without top navigation, so it opens the host page in a new tab.
+- The **install hook** runs on every install and every re-review of setup in Teambridge. It records the review in the account's config (so every server instance rereads Teambridge's bindings, not only the one that got the hook), drops the cached schema, and returns `setupPath: '/setup/'` only when a required slot is still unresolved (`setupPathFor`), so Teambridge opens setup right after install for those accounts and the app itself for the rest. The uninstall hook deletes the account's config and its cached schema and bindings.
 - An **account template** can come with the app (its `apps`, by slug). Teambridge installs it last, once everything the template sets up exists, so the first-contact guess sees the template's collections and fields. Name each slot as the template names what it binds to, and a new account from that template works without a visit to setup.
 - **Settings** in the section nav (`app/nav.tsx`) reopens `/setup/` prefilled with the current choices, so an admin can rebind later, when a field was renamed or a different collection should be used, without reinstalling.
 - **Without a database**, which an app for one account doesn't need, a production deployment has no Settings at all and resolves each account from the ids pinned in the spec, or else the guess by name. See "Without a database".
@@ -541,24 +542,27 @@ Mark a slot `required` only when the app cannot do anything useful without it. E
 
 | Slot | Unresolved | What happens |
 |---|---|---|
-| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/`, the install hook returns `setupPath`. Without a database: `requireSetup` throws, and the page fails like any other load error. |
+| required | | `ready` is false, the issue is `blocking`, `requireSetup` redirects to `/setup/` (which links to Teambridge when Teambridge holds the account's bindings), the install hook returns `setupPath`. Without a database or bindings in Teambridge: `requireSetup` throws, and the page fails like any other load error. |
 | optional | | `ready` stays true, the issue is non-blocking, the page renders. Show `SetupNotice` above the content, and degrade. |
 
-`SetupNotice` (`components/setup-notice.tsx`) lists the non-blocking issues with a link to Settings. It leaves out `not-used`, which means the admin chose "Not used" for an optional slot in Settings: a decision, not a problem. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice. Without a database it renders nothing, since nobody using the app could change anything there.
+`SetupNotice` (`components/setup-notice.tsx`) lists the non-blocking issues with a link to Settings, or to the app's setup in Teambridge when Teambridge holds the account's bindings. It leaves out `not-used`, which means the admin chose "Not used" for an optional slot in Settings: a decision, not a problem. `not-set` (nobody has chosen yet), `not-found` (the chosen field was deleted) and `wrong-type` are worth a notice. Without a database, and with no bindings in Teambridge, it renders nothing, since nobody using the app could change anything there.
 
 ### How bindings and pinned ids interact
 
-`resolveSchema(client, spec, { bindings })` resolves every slot by id and nothing else. The bindings themselves may have come from the first-contact guess, an admin, or both; the resolver doesn't know or care. For each slot, in order:
+`resolveSchema(client, spec, { bindings })` resolves every slot by id and nothing else. The bindings themselves may have come from Teambridge, the first-contact guess, an admin in Settings, or a mix; the resolver doesn't know or care. `mergeBindings` (`lib/teambridge/bindings.ts`) builds them, and is the one place requirement keys are mapped onto the spec. For each slot, in order:
 
-1. **The account's binding**, if the setup page saved one. An id binds the slot to that collection or field. `null` means "Not used": the slot resolves to nothing and reports `not-used` (blocking only if the slot is required, which the setup page doesn't allow).
-2. **The id pinned in the spec**, when there is no binding for the slot (the key is absent from the saved bindings).
-3. **Nothing**, otherwise: the slot is `not-set` until an admin sets it. A bound or pinned id that no longer exists on the account is `not-found`; one that points at a field outside the spec's types is `wrong-type`. All three are blocking when the slot is required.
+1. **Teambridge's binding**, when it holds the slot's requirement key: `shifts` for a collection, `shifts.start` for a field, `shifts.status.open` for an option the spec lists (`optionKey('Open')`). `std.user` binds a spec collection with `standard: 'user'` when its own key isn't held.
+2. **The app's saved binding**, if the setup page or the first-contact guess saved one. An id binds the slot to that collection or field. `null` means "Not used": the slot resolves to nothing and reports `not-used` (blocking only if the slot is required, which the setup page doesn't allow). Saved field choices are dropped when Teambridge bound their collection to a different one.
+3. **The id pinned in the spec**, when there is no binding for the slot.
+4. **Nothing**, otherwise: the slot is `not-set` until an admin sets it. A bound or pinned id that no longer exists on the account is `not-found`; one that points at a field outside the spec's types is `wrong-type`. All three are blocking when the slot is required.
 
-Names never enter into resolution. Two accounts can call the same thing "Start Time" and "Shift Start" and both work (the first by the guess, the second by a choice in setup), and a rename on either changes nothing afterwards.
+**Select options** the spec lists (`options: ['Open', 'Filled']`) resolve in `resolved.collections.shifts.options.status.open` (`{ id, name } | null`): the option Teambridge bound, else the one option with that name, since the app's setup page has no picker for them. Filter by the resolved option's `name` (select filters match names), write its `id`.
 
-`resolveAccountSchema(client, spec)` is the same call with the bindings loaded from the config store (or, without a database, from a fresh guess: `resolveByGuess`); `requireSetup` adds the redirect. Resolve with the app's own access, `getTBClient({ accountId })`.
+Apart from that option fallback, names never enter into resolution. Two accounts can call the same thing "Start Time" and "Shift Start" and both work (the first by the guess, the second by a choice in setup), and a rename on either changes nothing afterwards.
 
-The cache: resolutions are cached per account for five minutes, keyed by the spec's content and the bindings. New bindings miss the cache on their own on every server instance; `invalidateSchema(accountId)` clears the entry for *unchanged* bindings (and the account's cached guess, without a database), so call it after every write to the config store (the setup action does) and in the lifecycle hooks. The caches and the in-memory store all live on `globalThis`, because Next bundles each route separately and a module-level map in the uninstall hook is not the one the page reads.
+`resolveAccountSchema(client, spec)` is the same call with the bindings loaded and merged: Teambridge's, then the config store's (or, without a database, a fresh guess starting from Teambridge's: `resolveByGuess`); `requireSetup` adds the redirect. Resolve with the app's own access, `getTBClient({ accountId })`.
+
+The cache: resolutions are cached per account for five minutes, keyed by the spec's content and the bindings. New bindings miss the cache on their own on every server instance; `invalidateSchema(accountId)` clears the entry for *unchanged* bindings (and the account's cached guess, without a database), so call it after every write to the config store (the setup action does) and in the lifecycle hooks. It also forgets the account's cached Teambridge bindings, which are otherwise kept five minutes per account. The caches and the in-memory store all live on `globalThis`, because Next bundles each route separately and a module-level map in the uninstall hook is not the one the page reads.
 
 ### The gate
 
@@ -573,7 +577,7 @@ export default async function Page() {
   try {
     const resolved = await requireSetup(getTBClient({ accountId }), schema);
     const start = resolved.collections.shifts.fields.start; // never null past this line when required
-    // … render the page, with <SetupNotice issues={resolved.issues} /> above the content
+    // … render the page, with <SetupNotice resolved={resolved} /> above the content
   } catch (e) {
     unstable_rethrow(e); // the redirect travels as an exception
     // log, and show the page's usual error (SchemaNotReadyError lands here too)
@@ -582,7 +586,7 @@ export default async function Page() {
 ```
 
 - Every page calls it before reading records. `redirect()` throws, so either keep the call outside your `try`, or open the `catch` with `unstable_rethrow(e)` as above. A `catch` that maps every error to a message turns the redirect into an error alert.
-- Without a database there is no Settings page to redirect to, so the gate throws `SchemaNotReadyError` instead. Let it fall into the page's ordinary error state, like any failed load: log it and show the usual "Couldn't load …" message. Its message, for the server log, names the account and what is missing; nothing about it is for the people using the app.
+- Without a database, and with no bindings in Teambridge, there is no setup to redirect to, so the gate throws `SchemaNotReadyError` instead. Let it fall into the page's ordinary error state, like any failed load: log it and show the usual "Couldn't load …" message. Its message, for the server log, names the account and what is missing; nothing about it is for the people using the app.
 - Don't gate `/setup/` itself, API routes, server actions or the lifecycle hooks. Those use `resolveAccountSchema()` and handle `ready === false` as a result, not a redirect.
 - Nothing restricts who reaches `/setup/` or the save action: no role or permission reaches the app from Teambridge yet, so anyone who can open the app can change its settings. Say so in your app's docs rather than inventing a check. When a signed permission claim arrives, gate the page and `saveSetup` on it in one place.
 
@@ -615,8 +619,8 @@ To use a different database, change `chooseConfigStore` in `lib/teambridge/confi
 A production build without `DATABASE_URL` has nowhere durable to save an admin's choices. That is how an app for one account is meant to run (the README's deploy button for one account adds no database), and also what a project whose database was removed, or a host other than Vercel, gets. Saving into memory would look like it worked and then be lost at the next cold start, on one server instance of several, so the app doesn't offer it. `settingsEnabled()` (`lib/teambridge/setup.ts`) is false there, and:
 
 - **Settings is hidden.** The section nav has no link, `/setup/` redirects home, and the save action and the setup page's fields route refuse.
-- **Each account resolves from the guess alone** (`resolveByGuess`): the id pinned in the spec when the account has it, or else the one collection and field with each slot's name and type. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
-- **When the guess can't fill a required slot, the app fails.** `requireSetup` throws `SchemaNotReadyError`, the page shows its ordinary load error, and the error's message in the server log names the account, the missing slots and the cause. `SetupNotice` renders nothing, so optional slots that don't match just leave their features off.
+- **Each account resolves from Teambridge's bindings and the guess** (`resolveByGuess`): what Teambridge holds, then the id pinned in the spec when the account has it, or else the one collection and field with each slot's name and type. Nothing is stored. The guess is cached per account for five minutes, but not while it leaves a required slot unresolved, so a fix in Teambridge shows on the next load.
+- **When neither can fill a required slot, the app fails** (unless Teambridge holds the account's bindings: then the gate sends the user to `/setup/`, which links to Teambridge). `requireSetup` throws `SchemaNotReadyError`, the page shows its ordinary load error, and the error's message in the server log names the account, the missing slots and the cause. `SetupNotice` renders nothing, so optional slots that don't match just leave their features off.
 - **The install hook asks for no `setupPath`**, since there is no setup page to open.
 
 **An app for one account** pins every slot's id in `app/schema.ts` (read them off the account's field list, see "Adding a collection or field"). Then it finds its collections and fields by id, a rename in Teambridge changes nothing, and the name is only a fallback. An app that keeps data of its own in tables (see "The config store") needs the database whatever the number of accounts. When an app for one account goes on a second, add the database (README → "Deployment") and redeploy: Settings appears, and each account's first request saves what the guess was already finding as its starting bindings.
@@ -625,7 +629,7 @@ What people using the app see never mentions a database, a deployment, configura
 
 ### Testing the flow
 
-Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. A production build without `DATABASE_URL` (`TB_DEV_MODE=true next build`, then `next start`) shows the other mode: no Settings link, `/setup/` redirecting home, the page's ordinary error for an account missing a required name (with `SchemaNotReadyError` in the server log), and the app appearing as soon as the name is fixed. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, and the section nav and URL sync inside the host.
+Standalone (`TB_DEV_MODE=true`) proves most of it: an account whose names match renders at once, with the guessed bindings visible in Settings; an account missing a required name lands on `/setup/` with the rest prefilled; saving redirects home and the page reads through the bindings; the install hook answers with `setupPath` for the second kind of account and without it for the first; the uninstall hook deletes the config, so the next contact guesses again. A production build without `DATABASE_URL` (`TB_DEV_MODE=true next build`, then `next start`) shows the other mode: no Settings link, `/setup/` redirecting home, the page's ordinary error for an account missing a required name (with `SchemaNotReadyError` in the server log), and the app appearing as soon as the name is fixed. `yarn test` covers the merge (`lib/teambridge/bindings.test.ts`) and the account flow with a fake client (`lib/teambridge/setup.test.ts`), including the dev-mode case: a client Teambridge doesn't know as a registered app gets a 404 from the bindings read, which is no bindings, so dev mode runs on Settings and the guess as before. Sign a hook by hand with the webhook secret (hex HMAC-SHA256 of `timestamp.body`, headers `x-tb-timestamp` and `x-tb-signature`, trailing slash on the path). What only the embedded app can show: Teambridge opening the app at `setupPath` right after install, the App Library link opening the host page, and the section nav and URL sync inside the host.
 
 ## Project structure
 
@@ -647,16 +651,19 @@ teambridge.manifest.ts    # ⚠ Example — install manifest (slug, title, summa
 teambridge.manifest.json  # Generated by `yarn manifest` — commit it
 scripts/manifest.ts   # The generator
 components/ui/        # shadcn primitives (own them, edit freely)
-components/setup-notice.tsx  # Notice for optional slots an account hasn't set, linking to Settings; every page renders it
+components/setup-notice.tsx  # Notice for optional slots an account hasn't set, linking to Settings or Teambridge; every page renders it
 lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
     schema.ts         # defineSchema / resolveSchema (by id) / guessBindings (by name, once) / invalidateSchema / toWriteValue / readIds
     manifest.ts       # defineAppManifest / buildRequirementManifest
     config-store.ts   # Per-account config behind ConfigStore (Postgres via Neon when DATABASE_URL is set, else memory)
-    setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / settingsEnabled / SETUP_PATH
+    setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / setupPathFor / settingsEnabled / SETUP_PATH
+    bindings.ts       # Teambridge's bindings: mergeBindings (requirement keys → slots) / loadTeambridgeBindings (cached) / optionKey
+    host.ts           # TB_APP_LIBRARY_SETUP_PATH / appLibrarySetupPath: host pages the app links to
+    *.test.ts         # `yarn test` (node:test via tsx)
     lookup.ts         # lookupNames: display names for linked records, cached per account
-    router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher
+    router/           # TBRouter (URL sync), TBRecordLink / useOpenRecord / TBRecordEditWatcher, TBHostLink (a host page, new tab)
     fetch.ts, url.ts  # tbFetch / tbPath for the /apps/<slug> base path
   utils.ts            # cn() helper
 proxy.ts              # Request validation
