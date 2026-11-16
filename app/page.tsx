@@ -7,6 +7,7 @@
  * and actions.ts). See AGENTS.md.
  */
 import Link from 'next/link';
+import { unstable_rethrow } from 'next/navigation';
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -17,8 +18,19 @@ import {
   InboxIcon,
   UserIcon,
 } from 'lucide-react';
-import { getTBContext, getTBClient, getCredentialsForAccount, TBRecordLink } from '@/lib/teambridge';
-import { readIds, resolveSchema, type SchemaIssue } from '@/lib/teambridge/schema';
+import {
+  getTBContext,
+  getTBClient,
+  getAppCredentials,
+  lookupNames,
+  nameFrom,
+  requireSetup,
+  TBApiError,
+  TBRecordLink,
+  type Field,
+} from '@/lib/teambridge';
+import { readIds, type SchemaIssue } from '@/lib/teambridge/schema';
+import { SetupNotice } from '@/components/setup-notice';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -56,11 +68,12 @@ export default async function Home({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const { accountId, user, userContext } = await getTBContext();
+  const ctx = await getTBContext();
+  const { accountId, user } = ctx;
   const params = await searchParams;
   const currentFilter = (params.status as FilterStatus) || 'all';
 
-  const credentials = getCredentialsForAccount();
+  const credentials = getAppCredentials();
   let error: string | null = null;
   let setupIssues: SchemaIssue[] = [];
   let allShifts: MappedShift[] = [];
@@ -70,12 +83,20 @@ export default async function Home({
 
   if (credentials) {
     try {
-      // Schema discovery is account structure, so it uses the app's own
-      // client and is cached per account. Records are read as the current
-      // user (`userContext`), so Teambridge applies their permissions.
-      const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
-      setupIssues = resolved.issues.filter((issue) => issue.blocking);
-      const client = getTBClient(userContext);
+      // Schema first. `requireSetup` resolves it with the app's own access
+      // (account structure, cached per account) from the choices saved for
+      // this account in Settings, and sends the user to /setup/ while a
+      // required collection or field is unresolved — so past this line every
+      // required field is there. (A deployment without a database has no
+      // Settings to send anyone to; there it throws, and the catch below
+      // shows the usual error.) What's left in `issues` is non-blocking: an
+      // optional slot nobody has set yet, or one whose field was deleted.
+      // Those get a notice and the feature degrades. Records are then read
+      // as the current user (`ctx.userContext`), so Teambridge applies their
+      // permissions.
+      const resolved = await requireSetup(getTBClient({ accountId }), schema);
+      setupIssues = resolved.issues;
+      const client = getTBClient(ctx);
       const shifts = resolved.collections.shifts;
       const { start, end, assignee, published } = shifts.fields;
 
@@ -103,39 +124,41 @@ export default async function Home({
           published: published ? record[published.id] === true : false,
         }));
 
-        // Reference fields hold record ids, not names. Build an id → name map
-        // from the Users collection.
-        if (usersId && usersPage) {
-          const nameOf = (record: Record<string, unknown>) =>
-            [firstName && record[firstName.id], lastName && record[lastName.id]].filter(Boolean).join(' ').trim();
-
-          for (const record of usersPage.data) {
-            const name = nameOf(record);
-            if (!name) continue;
-            usersList.push({ id: record.id, name });
-            userNames[record.id] = name;
+        // Reference fields hold record ids, not names. The Users page, read as
+        // this user, feeds the assignee picker. The names in the table come
+        // from `lookupNames`, which caches them per account: a page view only
+        // reads users nobody has looked up in the last ten minutes, at most 25
+        // of them, and never the whole Users collection. Its cache is shared
+        // by every user of the account, so it reads with the app's own access
+        // and is only asked about assignees on shifts this user could read.
+        // See AGENTS.md → "Record field mapping".
+        if (usersId) {
+          const nameFields = [firstName, lastName].filter((field): field is Field => Boolean(field));
+          for (const record of usersPage?.data ?? []) {
+            const name = nameFrom(record, nameFields);
+            if (name) usersList.push({ id: record.id, name });
           }
           usersList.sort((a, b) => a.name.localeCompare(b.name));
 
-          // Assignees outside that page: fetch just those records, never the
-          // whole Users collection.
-          const missing = [...new Set(allShifts.map((shift) => shift.userId))].filter(
-            (id): id is string => Boolean(id) && !userNames[id!]
+          const names = await lookupNames(
+            getTBClient({ accountId }),
+            usersId,
+            allShifts.map((shift) => shift.userId),
+            { fields: nameFields, seed: usersPage?.data }
           );
-          const records = await Promise.all(
-            missing.map((id) => client.collections.records.get(usersId, id).catch(() => null))
-          );
-          for (const record of records) {
-            const name = record && nameOf(record);
-            if (record && name) userNames[record.id] = name;
-          }
+          for (const [id, name] of names) userNames[id] = name;
         }
       }
     } catch (e) {
+      // The redirect from `requireSetup` travels as an exception; let it through.
+      unstable_rethrow(e);
       // Log the full error; show something specific. This app lives inside
       // Teambridge, so never tell the user it "can't connect to Teambridge".
       console.error('[Home] loading shifts', e);
-      error = "Couldn't load shifts. Try again, and if it keeps happening check the app's installation.";
+      error =
+        e instanceof TBApiError && e.isNotInstalled
+          ? "This app isn't installed on this account. Install it from the App Library, then reload."
+          : "Couldn't load shifts. Try again, and if it keeps happening check the app's installation.";
     }
   }
 
@@ -157,137 +180,137 @@ export default async function Home({
   const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   return (
-    <div className="bg-background">
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <h1 className="text-xl font-semibold">
-          {greeting}, {firstName}
-        </h1>
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <h1 className="text-xl font-semibold">
+        {greeting}, {firstName}
+      </h1>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard
-            icon={<CalendarDaysIcon />}
-            value={totalCount}
-            label="Total Shifts"
-            tone="warning"
-          />
-          <StatCard
-            icon={<CheckCircle2Icon />}
-            value={publishedCount}
-            label="Published"
-            tone="success"
-          />
-          <StatCard
-            icon={<FileEditIcon />}
-            value={draftCount}
-            label="Drafts"
-            tone="info"
-          />
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={<CalendarDaysIcon />}
+          value={totalCount}
+          label="Total Shifts"
+          tone="warning"
+        />
+        <StatCard
+          icon={<CheckCircle2Icon />}
+          value={publishedCount}
+          label="Published"
+          tone="success"
+        />
+        <StatCard
+          icon={<FileEditIcon />}
+          value={draftCount}
+          label="Drafts"
+          tone="info"
+        />
+      </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <ClockIcon className="size-4 text-muted-foreground" />
-              Shifts Overview
-            </CardTitle>
-            <CreateShiftModal users={usersList} />
-          </CardHeader>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ClockIcon className="size-4 text-muted-foreground" />
+            Shifts Overview
+          </CardTitle>
+          {!error && <CreateShiftModal users={usersList} />}
+        </CardHeader>
 
-          <FilterTabs current={currentFilter} />
+        <FilterTabs current={currentFilter} />
 
-          <CardContent>
-            {!credentials ? (
-              <Alert>
-                <AlertTriangleIcon />
-                <AlertTitle>Configuration required</AlertTitle>
-                <AlertDescription>
-                  No credentials found for account{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{accountId}</code>.
-                  Set <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_ID</code> and{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_SECRET</code> in your{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.local</code>, or add
-                  account-specific credentials.
-                </AlertDescription>
-              </Alert>
-            ) : error ? (
-              <Alert variant="destructive">
-                <AlertCircleIcon />
-                <AlertTitle>Couldn&apos;t load shifts</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : setupIssues.length > 0 ? (
+        <CardContent>
+          {!credentials ? (
+            <Alert>
+              <AlertTriangleIcon />
+              <AlertTitle>Configuration required</AlertTitle>
+              <AlertDescription>
+                No app credentials found. Set{' '}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_ID</code> and{' '}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">TB_CLIENT_SECRET</code> in your{' '}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.local</code>. One set
+                serves every account the app is installed on.
+              </AlertDescription>
+            </Alert>
+          ) : error ? (
+            <Alert variant="destructive">
+              <AlertCircleIcon />
+              <AlertTitle>Couldn&apos;t load shifts</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4">
               <SetupNotice issues={setupIssues} />
-            ) : filteredShifts.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Assignee</TableHead>
-                    <TableHead>Start Time</TableHead>
-                    <TableHead>End Time</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-0" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredShifts.map((shift) => (
-                    <TableRow key={shift.id}>
-                      <TableCell>
-                        <Assignee
-                          userId={shift.userId}
-                          userName={shift.userId ? userNames[shift.userId] : undefined}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {shift.startAt ? new Date(shift.startAt).toLocaleString() : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {shift.endAt ? new Date(shift.endAt).toLocaleString() : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge published={shift.published} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {/* Opens the host's record detail panel — see AGENTS.md → "Record detail". */}
-                        <TBRecordLink recordId={shift.id} className="text-sm text-primary hover:underline">
-                          Open
-                        </TBRecordLink>
-                      </TableCell>
+              {filteredShifts.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Assignee</TableHead>
+                      <TableHead>Start Time</TableHead>
+                      <TableHead>End Time</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-0" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <EmptyState filter={currentFilter} />
-            )}
-          </CardContent>
-
-          {totalShiftCount > 0 && (
-            <CardFooter className="text-xs text-muted-foreground">
-              Showing {filteredShifts.length} of {totalShiftCount} shifts
-              {currentFilter !== 'all' && ` (filtered by ${currentFilter})`}
-            </CardFooter>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredShifts.map((shift) => (
+                      <TableRow key={shift.id}>
+                        <TableCell>
+                          <Assignee
+                            userId={shift.userId}
+                            userName={shift.userId ? userNames[shift.userId] : undefined}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {shift.startAt ? new Date(shift.startAt).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {shift.endAt ? new Date(shift.endAt).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge published={shift.published} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {/* Opens the host's record detail panel — see AGENTS.md → "Record detail". */}
+                          <TBRecordLink recordId={shift.id} className="text-sm text-primary hover:underline">
+                            Open
+                          </TBRecordLink>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <EmptyState filter={currentFilter} />
+              )}
+            </div>
           )}
-        </Card>
+        </CardContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <UserIcon className="size-4 text-muted-foreground" />
-              Session Info
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">User</p>
-              <p className="mt-1">{user.name || user.email || 'Unknown'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Account ID</p>
-              <p className="mt-1 font-mono">{accountId || 'No account'}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
+        {totalShiftCount > 0 && (
+          <CardFooter className="text-xs text-muted-foreground">
+            Showing {filteredShifts.length} of {totalShiftCount} shifts
+            {currentFilter !== 'all' && ` (filtered by ${currentFilter})`}
+          </CardFooter>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <UserIcon className="size-4 text-muted-foreground" />
+            Session Info
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">User</p>
+            <p className="mt-1">{user.name || user.email || 'Unknown'}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Account ID</p>
+            <p className="mt-1 font-mono">{accountId || 'No account'}</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -407,26 +430,6 @@ function StatusBadge({ published }: { published: boolean }) {
     <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Published</Badge>
   ) : (
     <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Draft</Badge>
-  );
-}
-
-/**
- * Shown when the account is missing collections or fields the app needs.
- * Name exactly what to add, so an admin can fix it without reading code.
- */
-function SetupNotice({ issues }: { issues: SchemaIssue[] }) {
-  return (
-    <Alert>
-      <AlertTriangleIcon />
-      <AlertTitle>This app needs a few things set up</AlertTitle>
-      <AlertDescription>
-        <ul className="mt-1 list-disc space-y-1 pl-4">
-          {issues.map((issue) => (
-            <li key={`${issue.collection}/${issue.field ?? ''}`}>{issue.message}</li>
-          ))}
-        </ul>
-      </AlertDescription>
-    </Alert>
   );
 }
 

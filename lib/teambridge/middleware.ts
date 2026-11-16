@@ -3,19 +3,19 @@ import type { NextRequest } from 'next/server';
 import type { TBMiddlewareConfig } from './types';
 
 /**
- * Credentials for a specific account
+ * The app's OAuth2 client credentials. One set serves every account the app
+ * is installed on; installing an app is what grants its client the account.
  */
-export interface TBAccountCredentials {
+export interface TBAppCredentials {
   clientId: string;
   clientSecret: string;
 }
-
 
 /**
  * Read the app's OAuth2 client credentials from environment variables.
  * Returns null when either TB_CLIENT_ID or TB_CLIENT_SECRET is missing.
  */
-export function getCredentialsForAccount(): TBAccountCredentials | null {
+export function getAppCredentials(): TBAppCredentials | null {
   const clientId = process.env.TB_CLIENT_ID;
   const clientSecret = process.env.TB_CLIENT_SECRET;
 
@@ -130,7 +130,9 @@ function isRequestTooOld(timestamp: string, maxAge: number): boolean {
  * and extracts user/account context from headers.
  *
  * If Teambridge headers are present, it validates the signature and uses them.
- * If headers are missing, it falls back to environment variables (dev mode).
+ * If they are missing, the request did not come through Teambridge: it is
+ * refused with a 401, except in standalone development (`TB_DEV_MODE=true`),
+ * where the `TB_DEV_*` environment variables stand in for the headers.
  */
 export function tbMiddleware(config: TBMiddlewareConfig) {
   const { webhookSecret, maxRequestAge = 300 } = config;
@@ -188,14 +190,19 @@ export function tbMiddleware(config: TBMiddlewareConfig) {
       return response;
     }
 
-    // In production, require a valid Teambridge signature — no fallback.
-    if (process.env.VERCEL_ENV === 'production') {
+    // Without the proxy's headers the request did not come through
+    // Teambridge. Only standalone development (`TB_DEV_MODE=true`, the app
+    // running with no host around it) may stand in the TB_DEV_* account;
+    // everywhere else — production, previews, any other host — refuse it.
+    // Refusing only when `VERCEL_ENV` was `production` left preview
+    // deployments and other hosts serving the dev account to anyone.
+    if (process.env.TB_DEV_MODE !== 'true') {
       return new NextResponse('Unauthorized: Missing Teambridge signature', {
         status: 401,
       });
     }
 
-    // Fallback mode: no Teambridge headers, use environment variables
+    // Standalone development: no Teambridge headers, use environment variables
     const fallbackContext = getFallbackContext();
 
     if (!fallbackContext.accountId || !fallbackContext.userId) {
