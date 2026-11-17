@@ -1,40 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
 import type {
   TBHandlerConfig,
   TBInstallPayload,
   TBInstallContext,
+  TBInstallResult,
 } from '../types';
-
-/**
- * Validates the webhook signature from Teambridge
- */
-function validateWebhookSignature(
-  webhookSecret: string,
-  timestamp: string,
-  body: string,
-  signature: string
-): boolean {
-  const message = `${timestamp}.${body}`;
-  const expectedSignature = createHmac('sha256', webhookSecret)
-    .update(message)
-    .digest('hex');
-
-  try {
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
-}
+import { verifyWebhook } from './webhook';
 
 /**
  * Creates a handler for the Teambridge install webhook.
  *
- * This handler validates the webhook signature and calls your callback
- * with the installation context (accountId, apiToken, apiBaseUrl).
+ * Teambridge sends it when an admin installs the app on an account. It is
+ * advisory: the installation is active, and the app's credentials already
+ * cover the account, whatever this returns. So keep the callback fast and
+ * idempotent (an admin can resend the hook from the Dev Portal), and use it
+ * to record the account when the app keeps per-account state.
+ *
+ * Return `setupPath` to have Teambridge open the app at that app-local path
+ * right after install, for apps the installer has to configure first.
  *
  * @example
  * ```ts
@@ -43,68 +26,33 @@ function validateWebhookSignature(
  *
  * export const POST = handleTBInstall(
  *   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
- *   async (context) => {
- *     // Store the API token for this account
- *     await db.appInstallations.create({
- *       accountId: context.accountId,
- *       apiToken: context.apiToken,
- *     });
- *
- *     return { success: true };
+ *   async ({ accountId, accountName }) => {
+ *     await db.installations.upsert({ accountId, accountName });
+ *     return { success: true, setupPath: '/setup/' };
  *   }
  * );
  * ```
  */
 export function handleTBInstall(
   config: TBHandlerConfig,
-  callback: (
-    context: TBInstallContext
-  ) => Promise<{ success: boolean; error?: string }>
+  callback: (context: TBInstallContext) => Promise<TBInstallResult>
 ) {
   return async function handler(request: Request) {
     try {
-      const timestamp = request.headers.get('x-tb-timestamp');
-      const signature = request.headers.get('x-tb-signature');
+      const verified = await verifyWebhook<Partial<TBInstallPayload>>(request, config);
+      if (!verified.ok) return verified.response;
 
-      if (!timestamp || !signature) {
-        return NextResponse.json(
-          { success: false, error: 'Missing required headers' },
-          { status: 401 }
-        );
-      }
-
-      const bodyText = await request.text();
-
-      // Validate signature
-      if (
-        !validateWebhookSignature(
-          config.webhookSecret,
-          timestamp,
-          bodyText,
-          signature
-        )
-      ) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid signature' },
-          { status: 401 }
-        );
-      }
-
-      const payload: TBInstallPayload = JSON.parse(bodyText);
-
-      // Validate required fields
-      if (!payload.accountId || !payload.apiToken) {
+      const { accountId, accountName } = verified.payload;
+      if (!accountId) {
         return NextResponse.json(
           { success: false, error: 'Invalid payload' },
           { status: 400 }
         );
       }
 
-      // Call the user's callback
       const result = await callback({
-        accountId: payload.accountId,
-        apiToken: payload.apiToken,
-        apiBaseUrl: payload.apiBaseUrl,
+        accountId,
+        accountName: typeof accountName === 'string' ? accountName : undefined,
       });
 
       return NextResponse.json(result, {

@@ -1,40 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
 import type {
   TBHandlerConfig,
   TBUninstallPayload,
   TBUninstallContext,
+  TBUninstallResult,
 } from '../types';
-
-/**
- * Validates the webhook signature from Teambridge
- */
-function validateWebhookSignature(
-  webhookSecret: string,
-  timestamp: string,
-  body: string,
-  signature: string
-): boolean {
-  const message = `${timestamp}.${body}`;
-  const expectedSignature = createHmac('sha256', webhookSecret)
-    .update(message)
-    .digest('hex');
-
-  try {
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
-}
+import { verifyWebhook } from './webhook';
 
 /**
  * Creates a handler for the Teambridge uninstall webhook.
  *
- * This handler validates the webhook signature and calls your callback
- * with the uninstallation context (accountId).
+ * Teambridge sends it when an admin uninstalls the app from an account. By
+ * then the app's client has lost access to that account, so any later call
+ * for it fails with a 403 (`TBApiError.isNotInstalled`). Use the callback to
+ * drop per-account state and stop background work for the account.
  *
  * @example
  * ```ts
@@ -43,12 +22,8 @@ function validateWebhookSignature(
  *
  * export const POST = handleTBUninstall(
  *   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
- *   async (context) => {
- *     // Clean up data for this account
- *     await db.appInstallations.delete({
- *       where: { accountId: context.accountId },
- *     });
- *
+ *   async ({ accountId }) => {
+ *     await db.installations.delete({ where: { accountId } });
  *     return { success: true };
  *   }
  * );
@@ -56,53 +31,22 @@ function validateWebhookSignature(
  */
 export function handleTBUninstall(
   config: TBHandlerConfig,
-  callback: (
-    context: TBUninstallContext
-  ) => Promise<{ success: boolean; error?: string }>
+  callback: (context: TBUninstallContext) => Promise<TBUninstallResult>
 ) {
   return async function handler(request: Request) {
     try {
-      const timestamp = request.headers.get('x-tb-timestamp');
-      const signature = request.headers.get('x-tb-signature');
+      const verified = await verifyWebhook<Partial<TBUninstallPayload>>(request, config);
+      if (!verified.ok) return verified.response;
 
-      if (!timestamp || !signature) {
-        return NextResponse.json(
-          { success: false, error: 'Missing required headers' },
-          { status: 401 }
-        );
-      }
-
-      const bodyText = await request.text();
-
-      // Validate signature
-      if (
-        !validateWebhookSignature(
-          config.webhookSecret,
-          timestamp,
-          bodyText,
-          signature
-        )
-      ) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid signature' },
-          { status: 401 }
-        );
-      }
-
-      const payload: TBUninstallPayload = JSON.parse(bodyText);
-
-      // Validate required fields
-      if (!payload.accountId) {
+      const { accountId } = verified.payload;
+      if (!accountId) {
         return NextResponse.json(
           { success: false, error: 'Invalid payload' },
           { status: 400 }
         );
       }
 
-      // Call the user's callback
-      const result = await callback({
-        accountId: payload.accountId,
-      });
+      const result = await callback({ accountId });
 
       return NextResponse.json(result, {
         status: result.success ? 200 : 500,

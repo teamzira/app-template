@@ -8,15 +8,17 @@ export type {
   TBUninstallPayload,
   TBHandlerConfig,
   TBInstallContext,
+  TBInstallResult,
   TBUninstallContext,
+  TBUninstallResult,
 } from './types';
 
 // Middleware
 export {
   tbMiddleware,
-  getCredentialsForAccount,
+  getAppCredentials,
 } from './middleware';
-export type { TBAccountCredentials } from './middleware';
+export type { TBAppCredentials } from './middleware';
 
 // Context
 export { TBProvider, useTBContext, getTBContext } from './context';
@@ -28,6 +30,7 @@ export { TBRouter, TBRecordLink, TBRecordEditWatcher, useOpenRecord, isRecordId 
 export { TBClient, TBApiError, getTBClient } from './client';
 export type {
   TBClientConfig,
+  TBClientScope,
   PaginationOptions,
   ListRecordsOptions,
   ListAllRecordsOptions,
@@ -54,6 +57,24 @@ export type {
 
 // Handlers
 export { handleTBInstall, handleTBUninstall } from './handlers';
+
+// Per-account configuration and the setup gate. Also importable from their
+// own sub-paths (`@/lib/teambridge/config-store`, `@/lib/teambridge/setup`);
+// the schema helpers stay at `@/lib/teambridge/schema`.
+export { configStore, createMemoryConfigStore, createPostgresConfigStore } from './config-store';
+export type { AccountConfig, ConfigStore } from './config-store';
+
+// Display names for linked records, cached per account (also at `@/lib/teambridge/lookup`).
+export { invalidateNames, lookupNames, nameFrom } from './lookup';
+export type { LookupNamesOptions } from './lookup';
+export {
+  initializeAccount,
+  requireSetup,
+  resolveAccountSchema,
+  SchemaNotReadyError,
+  settingsEnabled,
+  SETUP_PATH,
+} from './setup';
 
 // URL + fetch helpers live at their own sub-paths so they're importable from
 // Client Components without pulling the rest of the barrel — which includes

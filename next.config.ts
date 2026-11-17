@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
-const isDevMode =
-  process.env.TB_DEV_MODE === "true" ||
-  (process.env.V0_MODE === "true" &&
-    process.env.VERCEL_ENV !== "production");
+const isDevMode = process.env.TB_DEV_MODE === "true";
 
 const tbServerBaseUrl =
   process.env.TB_SERVER_BASE_URL || "https://api.teambridge.com";
@@ -32,6 +29,15 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_TB_APP_BASE_PATH: tbAppBasePath,
   },
+  // Server Actions are posted from the iframe, whose origin is the Teambridge
+  // proxy, to this server, whose host is something else. Next rejects an
+  // action whose `Origin` header doesn't match the host with a 500 ("Invalid
+  // Server Actions request"), so the proxy host is allowed here. The proxy
+  // doesn't forward `Origin` today, which is why actions work at all; this
+  // keeps them working the day it does.
+  ...(isDevMode
+    ? {}
+    : { experimental: { serverActions: { allowedOrigins: [new URL(tbServerBaseUrl).host] } } }),
 };
 
 export default nextConfig;

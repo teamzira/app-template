@@ -2,7 +2,15 @@
 
 A starter template for building external apps that integrate with Teambridge.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_DEV_ACCOUNT_ID,TB_WEBHOOK_SECRET,APP_SLUG,V0_MODE&envDefaults=%7B%22TB_CLIENT_ID%22%3A%22Client%20ID%22%2C%22TB_CLIENT_SECRET%22%3A%22Client%20Secret%22%2C%22TB_DEV_ACCOUNT_ID%22%3A%22ID%20of%20account%20to%20use%20during%20development%22%2C%22TB_WEBHOOK_SECRET%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22APP_SLUG%22%3A%22Can%20leave%20blank%20until%20app%20is%20embedded%20in%20teambridge%22%2C%22V0_MODE%22%3A%22true%22%7D)
+Deploy it to Vercel with the button that fits the app (see [Deployment](#deployment)):
+
+**For one account**, without a database. The app finds its collections and fields by the ids pinned in `app/schema.ts`, or by name.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment)
+
+**For several accounts**, with a Neon database. Each account's admin chooses its collections and fields in Settings, and the database keeps the choice.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template&env=TB_CLIENT_ID,TB_CLIENT_SECRET,TB_WEBHOOK_SECRET,APP_SLUG&envDescription=All%20four%20come%20from%20the%20app%27s%20page%20in%20the%20Teambridge%20Dev%20Portal%3A%20client%20ID,%20client%20secret,%20webhook%20secret%20and%20slug.&envLink=https%3A%2F%2Fgithub.com%2Fteamzira%2Fapp-template%23deployment&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
 ## Getting Started
 
@@ -69,19 +77,29 @@ npx shadcn@latest add <name>
 
 ```
 ├── app/
-│   ├── layout.tsx              # Root layout with TBProvider
+│   ├── layout.tsx              # Root layout with TBProvider and the section nav
+│   ├── nav.tsx                 # Section nav: Home, and Settings at the foot
 │   ├── page.tsx                # ⚠ Example demo — replace contents when starting a real app
+│   ├── loading.tsx             # Skeleton shown while the page loads
 │   ├── create-shift-modal.tsx  # ⚠ Example — delete or replace
 │   ├── actions.ts              # ⚠ Example — delete or replace
 │   ├── schema.ts               # ⚠ Example — your app's collections and fields
+│   ├── setup/                  # Setup / Settings page (generic over schema.ts)
+│   │   ├── page.tsx            #   pickers per collection and field
+│   │   ├── setup-form.tsx      #   the form (client component)
+│   │   ├── actions.ts          #   saveSetup: validate, store, redirect
+│   │   └── loading.tsx
 │   ├── globals.css             # Alloy design tokens + Tailwind theme bridge
 │   └── api/
+│       ├── setup/fields/
+│       │   └── route.ts        # Fields of a collection, for the setup form
 │       └── teambridge/
 │           ├── install/
-│           │   └── route.ts    # Installation webhook
+│           │   └── route.ts    # Installation webhook (returns setupPath when needed)
 │           └── uninstall/
-│               └── route.ts    # Uninstallation webhook
+│               └── route.ts    # Uninstallation webhook (drops the account's config)
 ├── components/
+│   ├── setup-notice.tsx        # Notice for optional slots an account hasn't set (every page renders it)
 │   └── ui/                     # shadcn primitives, themed to Alloy
 ├── lib/
 │   ├── teambridge/             # Teambridge integration
@@ -90,7 +108,10 @@ npx shadcn@latest add <name>
 │   │   ├── middleware.ts       # Request validation (used by proxy.ts)
 │   │   ├── context/            # TBProvider and hooks
 │   │   ├── client/             # API client
-│   │   ├── schema.ts           # Schema resolution + write encoding
+│   │   ├── schema.ts           # Schema resolution (+ per-account bindings) + write encoding
+│   │   ├── config-store.ts     # Per-account config store: Postgres (Neon) when DATABASE_URL is set, else memory
+│   │   ├── setup.ts            # requireSetup() gate + resolveAccountSchema()
+│   │   ├── lookup.ts           # lookupNames(): display names for linked records, cached per account
 │   │   ├── router/             # URL sync + record detail panel helpers
 │   │   └── handlers/           # Lifecycle handlers
 │   └── utils.ts                # cn() helper
@@ -108,6 +129,8 @@ The Teambridge API uses **OAuth2 Client Credentials flow** for authentication. T
 1. Requests an access token from Auth0 using your client credentials
 2. Caches the token until it expires
 3. Automatically refreshes when needed
+
+One set of credentials serves every account the app is installed on. Installing the app on an account (Settings → App Library) is what grants the app's client access to it, so each request names its account with the `X-Account-Id` header. `getTBClient()` sets that from the request context; see [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
 
 ### Token Endpoint
 
@@ -148,19 +171,20 @@ function MyComponent() {
 
 Three calls cover almost everything:
 
-1. **Find the collection by name.** Look it up with `client.collections.list()` and match on `name` (e.g. `"Shifts"`, `"Users"`, `"Jobs"`).
-2. **Discover field IDs.** Each collection has fields with UUID IDs. Fetch them with `client.collections.getFields(collectionId)` and build a `name → id` map.
+1. **Find the collection.** `client.collections.list()` returns every collection with its UUID.
+2. **Discover field IDs.** Each collection has fields with UUID IDs: `client.collections.getFields(collectionId)`.
 3. **Read or write records using field IDs.** Records are keyed by field ID — not field name — both on read and on write.
+
+Apps don't look things up by name per request. They declare the collections and fields they use in `app/schema.ts`; on first contact with an account the template guesses each one by name and saves the ids, an admin corrects anything on the setup page, and `requireSetup()` hands the code resolved `Field` objects (see "Setup and settings"). The walk-through below is the raw API, for exploring an account.
 
 #### Example: list shifts
 
 ```tsx
-import { TBClient } from '@/lib/teambridge';
+import { getTBClient, getTBContext } from '@/lib/teambridge';
 
-const client = new TBClient({
-  clientId: process.env.TB_CLIENT_ID!,
-  clientSecret: process.env.TB_CLIENT_SECRET!,
-});
+// The context carries the account (and the current user) the request is for.
+const ctx = await getTBContext();
+const client = getTBClient(ctx);
 
 // 1. Find the Shifts collection
 const collections = await client.collections.list();
@@ -203,33 +227,31 @@ await client.collections.records.update(shiftsCollection.id, recordId, {
 
 The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, including a cross-reference to the Users collection for the assignee picker. (Reminder: those files are example code — replace before shipping.)
 
-You can also use the convenience function in server-side code, which reads credentials from env vars:
+`getTBClient(ctx)` acts as the current user, so Teambridge applies their permissions. `getTBClient({ accountId })` acts with the app's own access, which is what schema resolution and background work use. Constructing `TBClient` by hand is for tests; a client without an `accountId` stops working once the app is installed on a second account.
 
-```tsx
-import { getTBClient } from '@/lib/teambridge';
-const client = getTBClient();
-```
+### Setup and settings
+
+Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button for several accounts arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL`, such as an app for one account, has no Settings page: it resolves each account from the ids pinned in `app/schema.ts`, or else the guess by name, and an account missing a required collection or field gets the page's ordinary error, with the reason in the server log. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
 
 ### Handling Installation
 
-Edit `app/api/teambridge/install/route.ts`:
+Teambridge calls `app/api/teambridge/install/route.ts` when an admin installs the app on an account, and `uninstall/route.ts` when they remove it. Both are advisory: the app's credentials already cover the account (or no longer do) whatever the hook returns. The template's install hook asks Teambridge to open the setup page right after install, but only for accounts that need it:
 
 ```tsx
-import { handleTBInstall } from '@/lib/teambridge';
+import { getTBClient, handleTBInstall, resolveAccountSchema, settingsEnabled, SETUP_PATH } from '@/lib/teambridge';
+import { schema } from '@/app/schema';
 
 export const POST = handleTBInstall(
   { webhookSecret: process.env.TB_WEBHOOK_SECRET! },
-  async (context) => {
-    // Store credentials for this account
-    await db.appInstallations.create({
-      accountId: context.accountId,
-      // Store any account-specific data
-    });
-
-    return { success: true };
+  async ({ accountId }) => {
+    const resolved = await resolveAccountSchema(getTBClient({ accountId }), schema);
+    // No setup page to open without a database.
+    return { success: true, setupPath: resolved.ready || !settingsEnabled() ? undefined : SETUP_PATH };
   }
 );
 ```
+
+The uninstall hook deletes the account's config. Apps installed before the hook existed never received it, so nothing may depend on it: the `requireSetup()` gate covers those accounts on their first request. See [`AGENTS.md`](./AGENTS.md) → "One deployment, many accounts".
 
 ## Development Workflow
 
@@ -239,7 +261,10 @@ Dev mode allows you to develop locally without going through the Teambridge prox
 
 1. Set `TB_DEV_MODE=true` in your `.env.local`
 2. Configure `TB_DEV_ACCOUNT_ID`, `TB_DEV_USER_ID`, etc.
-3. The proxy will use these values instead of validating signatures
+3. The proxy will use these values instead of validating signatures (a request without Teambridge's headers is refused everywhere else)
+4. Leave `DATABASE_URL` unset, or point it at a Neon database to develop against the real settings store; without it the choices made in Settings live in memory and are gone after a restart
+
+Every API call acts on `TB_DEV_ACCOUNT_ID`, so the app must be installed on that account (Settings → App Library). If it isn't, every call fails with a 403. Take the id from the server `TB_OPEN_API_BASE_URL` points at; a local database's account id is not valid against production.
 
 ### Testing with Real Data
 
@@ -256,10 +281,15 @@ Dev mode allows you to develop locally without going through the Teambridge prox
 interface TBClientConfig {
   clientId: string;      // OAuth2 Client ID
   clientSecret: string;  // OAuth2 Client Secret
-  baseUrl?: string;      // API base URL (default: https://api.teambridge.com)
+  accountId?: string;    // Account every request acts on (X-Account-Id); getTBClient() always sets it
+  userContext?: string;  // Signed X-User-Context to act as the current user
+  baseUrl?: string;      // API base URL (default: https://open-api.teambridge.com)
   authUrl?: string;      // Auth0 token endpoint (default: https://teambridge.us.auth0.com/oauth/token)
-  audience?: string;     // OAuth2 audience (default: API base URL)
+  audience?: string;     // OAuth2 audience (default: https://api.teambridge.com/openapi/)
 }
+
+getTBClient(ctx)                    // from getTBContext(): as the current user
+getTBClient({ accountId })          // the app's own access
 ```
 
 ### Client Methods
@@ -284,18 +314,44 @@ client.documents.upload(file, options?)
 client.timezones.list()
 ```
 
-Non-2xx responses throw `TBApiError` (`status`, `path`, `body`).
+Non-2xx responses throw `TBApiError` (`status`, `path`, `body`, plus `code` and `detail` parsed from the body). `error.isNotInstalled` is true when the app has no access to the account: not installed, or uninstalled.
 
 ### Schema helpers
 
-`@/lib/teambridge/schema` declares the collections and fields an app uses, resolves them once per account (pinned ids first, names as the fallback), reports missing ones, and encodes writes:
+`@/lib/teambridge/schema` declares the collections and fields an app uses, resolves them once per account by id (the account's bindings, else ids pinned in the spec), guesses the bindings by name once, reports unresolved slots, and encodes writes:
 
 ```ts
 defineSchema(spec)
-resolveSchema(client, spec, { cacheKey: accountId })  // → { ready, collections, issues }
+resolveSchema(client, spec, { bindings?, structure? }) // → { ready, collections, issues }; cached per account + bindings
+guessBindings(client, spec, existing?, structure?)    // good-faith guess by name for slots not set yet (the one name match)
+readAccountStructure(client)                          // the account's collections and fields, read once and shared by a guess and a resolution
+invalidateSchema(accountId)                           // after writing the account's config
 toWriteValue(field, value)                            // follows writeFormatHint / DATETIME / readOnly
 readIds(value)                                        // link & select values → string[]
 ```
+
+`@/lib/teambridge/setup` and `@/lib/teambridge/config-store` (both also exported from `@/lib/teambridge`):
+
+```ts
+resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact
+requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved (without a database: throws SchemaNotReadyError)
+settingsEnabled()                                     // false in a production build without a database: no Settings page
+initializeAccount(client, spec, structure?)           // the first-contact guess + save, on its own
+configStore.get(accountId) / set(accountId, config) / delete(accountId)   // Postgres when DATABASE_URL is set, else memory; configStore.persistent says which
+createPostgresConfigStore(connectionString) / createMemoryConfigStore()   // the two implementations behind it
+```
+
+### Names for linked records
+
+`@/lib/teambridge/lookup` (also exported from `@/lib/teambridge`) turns the record ids in reference fields into display names without a read per record per page view:
+
+```ts
+lookupNames(client, collectionId, ids, { fields, seed?, maxReads? })   // → Map<recordId, name>; cached per account for 10 minutes
+nameFrom(record, fields)                                               // one record's name from those fields
+invalidateNames(accountId)                                             // after the app renames something it shows
+```
+
+Its cache is shared by every user of the account: read with `getTBClient({ accountId })`, and pass only ids from records the current user read. See [`AGENTS.md`](./AGENTS.md) → "Record field mapping".
 
 ### Record detail
 
@@ -313,29 +369,34 @@ See [`AGENTS.md`](./AGENTS.md) → "Living inside the Teambridge shell" for why 
 
 ```ts
 interface TBContext {
-  accountId: string;
+  accountId: string;     // the account this request is for
   userId: string;
   user: {
     id: string;
     email: string;
     name: string;
   };
+  userContext?: string;  // signed X-User-Context (server only)
 }
 ```
 
 ## Deployment
 
-Your app can be deployed to any platform that supports Next.js:
+Deploy with one of the two buttons at the top of this README. Each clones the repository into your GitHub, GitLab or Bitbucket account, creates a Vercel project, and asks for what the app needs:
 
-- [Vercel](https://vercel.com)
-- [Netlify](https://netlify.com)
-- [Railway](https://railway.app)
-- Self-hosted
+1. **The four Teambridge values**: `TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET` and `APP_SLUG`, from the app's page in the Teambridge Dev Portal (Settings → Dev Portal), where you register the app first. None of them can be left for later: the proxy signs every request with the webhook secret, and the slug sets the path the app is served under. One deployment and one set of credentials serve every account the app is installed on. Deployments always build for the Teambridge proxy; the `TB_DEV_*` values are for local development only.
+2. **The Neon database**, with the button for several accounts only. That button makes it mandatory (`products` in its URL names Neon's Postgres product, and the flow won't deploy until it exists). The defaults are right: in the flow's Storage section click **Add** next to Neon, then **Continue**, then **Create**. The region, the Free plan and the generated name can all stay as they are. The dialog also offers two add-ons, Auth and Realtime; the app uses neither (users are already signed in to Teambridge, which identifies them on every request), so they can be left alone. Auth is on by default and does no harm beyond a few unused env vars; turn it off only if you want to keep the project tidy. Create provisions the database in a few seconds and connects it to the project, which sets `DATABASE_URL` (with `DATABASE_URL_UNPOOLED`, `PG*` and `POSTGRES_*` beside it) on every environment; that is where the app keeps each account's settings. No Neon account or sign-in is involved; billing, if any, goes through Vercel. The free plan's one drawback is that the database suspends after five idle minutes, so the first request after a pause waits a second or so while it resumes.
+3. **The app's origin** in the Dev Portal: the project's production domain, `https://<project>.vercel.app` or a custom domain, never a per-deployment URL. On teams with Deployment Protection the generated deployment URLs sit behind Vercel Authentication, which the Teambridge proxy can't pass; the production domain stays public. The `/apps/<slug>` path is appended for you.
 
-Make sure to:
+### One account or several
 
-1. Set all required environment variables (`TB_CLIENT_ID`, `TB_CLIENT_SECRET`, `TB_WEBHOOK_SECRET`)
-2. Configure your app's base URL in the Teambridge app registry
+The database keeps each account's choice of collections and fields, made by an admin in Settings, so that one deployment can serve accounts that name things differently. An app for one account doesn't need it: pin the ids of its collections and fields in `app/schema.ts` ([`AGENTS.md`](./AGENTS.md) → "Per-account configuration"), and it finds them however the account renames them. Without a database the app has no Settings page. It resolves each account from the pinned ids, or else the one collection and field with each slot's name and type, and an account where neither finds a required one gets the page's ordinary error, with the reason in the server log. An app that keeps data of its own in the database needs one whatever the number of accounts.
+
+There are two buttons because Vercel's deploy flow can't make a product optional: it won't deploy until every product in `products` is added. `skippable-integrations` applies only to the older `integration-ids` parameter, which opens the integration's legacy install window and keeps the flow from deploying even after the database exists, so don't add it back.
+
+To add the database later, when an app for one account goes on a second: open the Vercel project's Storage tab, create a Neon database and connect it to every environment (or run `vercel integration add neon --no-env-pull` in a checkout linked to the project; without the flag it rewrites `.env.local` with the project's variables). Then redeploy, since a deployment keeps the environment it was created with. Settings appears, and each account's first request saves what the app was already finding for it as its starting choice.
+
+The app runs anywhere Next.js does. Away from the buttons, set the four variables yourself, and for an app on several accounts a `DATABASE_URL` from a Neon project (the settings store uses Neon's serverless driver, which talks to Neon's HTTP endpoint, so a Postgres elsewhere needs Neon's proxy in front of it).
 
 ## Learn More
 

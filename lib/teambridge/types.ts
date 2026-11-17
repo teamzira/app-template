@@ -44,22 +44,23 @@ export interface TBMiddlewareConfig {
 }
 
 /**
- * Install webhook payload from Teambridge
+ * Install webhook payload from Teambridge, sent when an admin installs the
+ * app on an account. There is no per-account token: the app's one set of
+ * credentials covers every account it is installed on, and installing is
+ * what grants the account.
  */
 export interface TBInstallPayload {
-  /** UUID of the account installing the app */
+  /** UUID of the account the app was installed on */
   accountId: string;
-  /** API token for making calls to Teambridge */
-  apiToken: string;
-  /** Base URL for Teambridge API */
-  apiBaseUrl: string;
+  /** The account's display name, for logs and setup copy. */
+  accountName?: string;
 }
 
 /**
  * Uninstall webhook payload from Teambridge
  */
 export interface TBUninstallPayload {
-  /** UUID of the account uninstalling the app */
+  /** UUID of the account the app was uninstalled from */
   accountId: string;
 }
 
@@ -69,6 +70,8 @@ export interface TBUninstallPayload {
 export interface TBHandlerConfig {
   /** Webhook secret for HMAC signature validation */
   webhookSecret: string;
+  /** Maximum age of a webhook in seconds (default: 300) */
+  maxRequestAge?: number;
 }
 
 /**
@@ -77,6 +80,26 @@ export interface TBHandlerConfig {
 export type TBInstallContext = TBInstallPayload;
 
 /**
+ * What the install callback returns. The webhook is advisory: the
+ * installation is active whatever this says. `setupPath` asks Teambridge to
+ * open the app at that app-local path (for example `/setup/`) right after
+ * install, for apps the installer has to configure first.
+ */
+export interface TBInstallResult {
+  success: boolean;
+  error?: string;
+  setupPath?: string;
+}
+
+/**
  * Uninstall handler context passed to the callback
  */
 export type TBUninstallContext = TBUninstallPayload;
+
+/**
+ * What the uninstall callback returns.
+ */
+export interface TBUninstallResult {
+  success: boolean;
+  error?: string;
+}

@@ -3,8 +3,8 @@
 /**
  * EXAMPLE CODE — replace or remove before building a real app. See AGENTS.md.
  */
-import { getTBContext, getTBClient, TBApiError } from '@/lib/teambridge';
-import { resolveSchema, toWriteValue } from '@/lib/teambridge/schema';
+import { getTBContext, getTBClient, resolveAccountSchema, TBApiError } from '@/lib/teambridge';
+import { toWriteValue } from '@/lib/teambridge/schema';
 import { schema } from './schema';
 
 export async function createShift(formData: FormData) {
@@ -20,18 +20,22 @@ export async function createShift(formData: FormData) {
     return { error: 'End time must be after start time.' };
   }
 
-  const { accountId, userContext } = await getTBContext();
+  const ctx = await getTBContext();
 
   try {
-    const resolved = await resolveSchema(getTBClient(), schema, { cacheKey: accountId });
+    // Same resolution as the page: the account's bindings, if any, then names.
+    const resolved = await resolveAccountSchema(getTBClient({ accountId: ctx.accountId }), schema);
     const shifts = resolved.collections.shifts;
     const { start, end, assignee: assigneeField } = shifts.fields;
     if (!resolved.ready || !shifts.id || !start || !end) {
-      return { error: "Can't create shifts yet: the Shifts collection is missing fields this app needs." };
+      // Logged, not shown: people using the app can't do anything about the
+      // account's setup from here.
+      console.error('[createShift] the schema is not ready', resolved.issues);
+      return { error: "Couldn't create the shift. Try again." };
     }
 
     // Write as the current user, so Teambridge applies their permissions.
-    const client = getTBClient(userContext);
+    const client = getTBClient(ctx);
     const recordData: Record<string, unknown> = {
       [start.id]: toWriteValue(start, startTime),
       [end.id]: toWriteValue(end, endTime),
@@ -45,6 +49,9 @@ export async function createShift(formData: FormData) {
   } catch (e) {
     // Log the full error for debugging; show the user something specific.
     console.error('[createShift]', e);
+    if (e instanceof TBApiError && e.isNotInstalled) {
+      return { error: "This app isn't installed on this account." };
+    }
     if (e instanceof TBApiError && e.status === 403) {
       return { error: "You don't have permission to create shifts." };
     }
