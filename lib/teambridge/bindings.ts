@@ -112,6 +112,10 @@ function bindingsCache(): BindingsCache {
  * re-review — so a server instance that didn't receive the hook still reads
  * the new bindings on its next request instead of up to five minutes later.
  *
+ * The first read of a `stamp` this instance hasn't seen reads fresh
+ * (`getBindings({ fresh: true })`), since it follows the hook that announced
+ * that setup; later reads, once the cache expires, read Teambridge's replica.
+ *
  * An account Teambridge holds nothing for answers `{ slug: null, bindings: {} }`
  * and the app falls back to its own setup. So does a failed read (logged, and
  * not cached, so the next request tries again): bindings are an improvement
@@ -128,6 +132,7 @@ export function loadTeambridgeBindings(client: TBClient, stamp = ''): Promise<Ap
   const now = Date.now();
   const cached = cache.get(accountId)?.get(stamp);
   if (cached && cached.expiresAt > now) return cached.value;
+  const fresh = Boolean(stamp) && !cached;
 
   for (const [cachedAccountId, entries] of cache) {
     for (const [cachedStamp, entry] of entries) {
@@ -143,7 +148,7 @@ export function loadTeambridgeBindings(client: TBClient, stamp = ''): Promise<Ap
   }
   const entry: BindingsEntry = {
     expiresAt: now + BINDINGS_TTL_MS,
-    value: client.apps.getBindings().catch((error: unknown) => {
+    value: client.apps.getBindings({ fresh }).catch((error: unknown) => {
       console.warn("[Teambridge] Couldn't read the app's bindings for", accountId, '- using its own setup.', error);
       const current = bindingsCache().get(accountId);
       if (current?.get(stamp) === entry) current.delete(stamp);

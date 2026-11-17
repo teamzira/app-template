@@ -535,13 +535,17 @@ export class TBClient {
      * A 404 means the client isn't a registered app (a dev client, say); that
      * answers as no bindings rather than an error. Prefer
      * `resolveAccountSchema`, which applies these for you and caches them.
+     *
+     * Teambridge serves them from a replica. Pass `{ fresh: true }` for the
+     * one read straight after an install hook, which must see the setup that
+     * hook announced.
      */
-    getBindings: async (): Promise<AppBindings> => {
+    getBindings: async ({ fresh = false }: { fresh?: boolean } = {}): Promise<AppBindings> => {
       let response: { slug?: unknown; bindings?: unknown } | null;
       try {
         response = await this.request<{ slug?: unknown; bindings?: unknown } | null>(
           'GET',
-          '/v1/apps/self/bindings'
+          fresh ? '/v1/apps/self/bindings?fresh=true' : '/v1/apps/self/bindings'
         );
       } catch (error) {
         if (error instanceof TBApiError && error.status === 404) return { slug: null, bindings: {} };

@@ -132,11 +132,12 @@ describe('loadTeambridgeBindings', () => {
     assert.ok(calls[0].endsWith('/v1/apps/self/bindings'));
   });
 
-  it('reads again for a newer setup stamp', async () => {
+  it('reads again, fresh from Teambridge\'s primary, for a newer setup stamp', async () => {
     const { client, calls } = clientAnswering(() => Response.json({ data: { slug: 's', bindings: {} } }));
     await loadTeambridgeBindings(client, '2026-11-01T00:00:00Z');
     await loadTeambridgeBindings(client, '2026-11-02T00:00:00Z');
     assert.equal(calls.length, 2);
+    assert.ok(calls.every((url) => url.endsWith('/v1/apps/self/bindings?fresh=true')));
   });
 
   it('answers a 404 (not a registered app) as no bindings', async () => {
