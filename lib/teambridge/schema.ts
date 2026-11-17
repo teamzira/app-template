@@ -221,7 +221,7 @@ export type ResolvedSchema<S extends SchemaSpec> = {
   /**
    * The app's slug in Teambridge when Teambridge holds this account's
    * bindings, else null. Then setup is fixed in Teambridge's App Library
-   * (`appLibrarySetupPath` in `./host`), not on the app's own setup page.
+   * (`TBSetupLink` in `./router`), not on the app's own setup page.
    */
   teambridgeSlug: string | null;
 };

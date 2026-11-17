@@ -114,9 +114,8 @@ npx shadcn@latest add <name>
 │   │   ├── config-store.ts     # Per-account config store: Postgres (Neon) when DATABASE_URL is set, else memory
 │   │   ├── setup.ts            # requireSetup() gate + resolveAccountSchema()
 │   │   ├── bindings.ts         # Teambridge's bindings from the install, merged onto the spec's slots
-│   │   ├── host.ts             # Teambridge host pages the app links to (App Library setup)
 │   │   ├── lookup.ts           # lookupNames(): display names for linked records, cached per account
-│   │   ├── router/             # URL sync + record detail panel helpers
+│   │   ├── router/             # URL sync, record detail panel and App Library setup helpers
 │   │   └── handlers/           # Lifecycle handlers
 │   └── utils.ts                # cn() helper
 ├── proxy.ts                    # Next.js proxy (formerly middleware.ts)

@@ -9,7 +9,8 @@
  *
  * The link goes to the app's own Settings, or, when Teambridge holds the
  * account's bindings (`resolved.teambridgeSlug`), to the app's setup in
- * Teambridge's App Library, opened on the host's page.
+ * Teambridge's App Library, which the host opens in place of the app
+ * (`TBSetupLink`).
  *
  * It renders nothing when nothing needs saying: "Not used" is an admin's own
  * choice, not a problem, and required slots never reach a page (the gate
@@ -23,8 +24,7 @@
  */
 import Link from 'next/link';
 import { AlertTriangleIcon } from 'lucide-react';
-import { appLibrarySetupPath } from '@/lib/teambridge/host';
-import { TBHostLink } from '@/lib/teambridge/router';
+import { TBSetupLink } from '@/lib/teambridge/router';
 import { SETUP_PATH, settingsEnabled } from '@/lib/teambridge/setup';
 import type { ResolvedSchema, SchemaSpec } from '@/lib/teambridge/schema';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -55,9 +55,7 @@ export function SetupNotice({
           {teambridgeSlug ? (
             <>
               An admin can finish this app&apos;s setup in{' '}
-              <TBHostLink path={appLibrarySetupPath(teambridgeSlug)} className="text-primary hover:underline">
-                Teambridge&apos;s App Library
-              </TBHostLink>
+              <TBSetupLink className="text-primary hover:underline">Teambridge&apos;s App Library</TBSetupLink>
               .
             </>
           ) : (

@@ -1,3 +1,3 @@
 export { TBRouter } from './TBRouter';
 export { TBRecordLink, TBRecordEditWatcher, useOpenRecord, isRecordId } from './openRecord';
-export { TBHostLink } from './TBHostLink';
+export { TBSetupLink } from './TBSetupLink';

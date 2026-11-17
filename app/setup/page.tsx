@@ -24,7 +24,7 @@
  * unless the account's setup is in Teambridge.
  */
 import { redirect } from 'next/navigation';
-import { AlertCircleIcon, AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
+import { AlertCircleIcon, AlertTriangleIcon } from 'lucide-react';
 import {
   getAppCredentials,
   getTBClient,
@@ -34,8 +34,7 @@ import {
   type TBClient,
 } from '@/lib/teambridge';
 import { configStore } from '@/lib/teambridge/config-store';
-import { appLibrarySetupPath } from '@/lib/teambridge/host';
-import { TBHostLink } from '@/lib/teambridge/router';
+import { TBSetupLink } from '@/lib/teambridge/router';
 import { guessBindings, type CollectionSpec, type SchemaBindings, type SchemaIssue } from '@/lib/teambridge/schema';
 import { resolveAccountSchema, settingsEnabled, teambridgeSetupFor } from '@/lib/teambridge/setup';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -54,7 +53,7 @@ export default async function SetupPage() {
   const credentials = getAppCredentials();
   // Never throws: a failed read counts as no bindings, and the app's own setup applies.
   const teambridgeSlug = credentials ? await teambridgeSetupFor(getTBClient({ accountId })) : null;
-  if (teambridgeSlug) return <TeambridgeSetup accountId={accountId} slug={teambridgeSlug} />;
+  if (teambridgeSlug) return <TeambridgeSetup accountId={accountId} />;
   if (!settingsEnabled()) redirect('/');
 
   if (!credentials) {
@@ -121,7 +120,7 @@ export default async function SetupPage() {
  * Setup for an account whose bindings Teambridge holds: what is still
  * unresolved, and the way to the app's setup review in the App Library.
  */
-async function TeambridgeSetup({ accountId, slug }: { accountId: string; slug: string }) {
+async function TeambridgeSetup({ accountId }: { accountId: string }) {
   let issues: SchemaIssue[] = [];
   let error: string | null = null;
   try {
@@ -160,13 +159,10 @@ async function TeambridgeSetup({ accountId, slug }: { accountId: string; slug: s
       ) : null}
       <div>
         <Button asChild variant={shown.length > 0 ? 'default' : 'outline'}>
-          <TBHostLink path={appLibrarySetupPath(slug)}>
-            Open setup in the App Library
-            <ExternalLinkIcon />
-          </TBHostLink>
+          <TBSetupLink>Open setup in the App Library</TBSetupLink>
         </Button>
         <p className="mt-2 text-sm text-muted-foreground">
-          It opens in a new tab. Reload this app once you&apos;ve saved there.
+          Once you&apos;ve saved there, Teambridge brings you back to this app.
         </p>
       </div>
     </SetupShell>

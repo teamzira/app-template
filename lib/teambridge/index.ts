@@ -25,7 +25,7 @@ export type { TBAppCredentials } from './middleware';
 export { TBProvider, useTBContext, getTBContext } from './context';
 
 // Router (URL sync with parent iframe host, host record detail panel)
-export { TBRouter, TBRecordLink, TBRecordEditWatcher, TBHostLink, useOpenRecord, isRecordId } from './router';
+export { TBRouter, TBRecordLink, TBRecordEditWatcher, TBSetupLink, useOpenRecord, isRecordId } from './router';
 
 // Client
 export { TBClient, TBApiError, getTBClient } from './client';
