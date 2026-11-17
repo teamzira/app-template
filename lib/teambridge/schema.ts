@@ -6,11 +6,18 @@ import type { Collection, Field } from './client/types';
  * resolves them against an account once, instead of scattering lookups
  * through the code.
  *
- * Slots resolve by id. An account's **bindings** — the collection and field
- * each slot is bound to, saved in the config store (`./config-store`) — come
- * first; an `id` pinned in the spec is the default for accounts with no
- * binding for that slot. Nothing else: a slot with neither resolves to
- * nothing until it is set.
+ * Slots resolve by id. An account's **bindings** — the collection, field and
+ * select option each slot is bound to — come first: the ones Teambridge
+ * recorded when an admin installed the app against its manifest (`./bindings`),
+ * then the ones saved in the app's config store (`./config-store`). An `id`
+ * pinned in the spec is the default for accounts with neither. Nothing else:
+ * a slot with none of these resolves to nothing until it is set.
+ *
+ * The same spec is the app's install manifest: `teambridge.manifest.ts` wraps
+ * it, and `yarn manifest` turns it into the requirements Teambridge checks
+ * before installing the app. The fields below marked "install" only affect
+ * that. The spec's keys are the requirement keys Teambridge binds (`shifts`,
+ * `shifts.start`), so never rename one.
  *
  * Names are used once, to make a good-faith **guess** at the bindings:
  * `guessBindings` matches each slot to the one collection or field with the
@@ -47,24 +54,66 @@ import type { Collection, Field } from './client/types';
  *   const startField = resolved.collections.shifts.fields.start; // Field | null
  */
 
+/** Built-in Teambridge collections. Matched by kind on install, whatever the account calls them. */
+export type StandardCollection =
+  | 'user'
+  | 'shift'
+  | 'location'
+  | 'role'
+  | 'job'
+  | 'placement'
+  | 'contact'
+  | 'project'
+  | 'document'
+  | 'task'
+  | 'shift_group'
+  | 'timeoff'
+  | 'break'
+  | 'pay_periods';
+
 export interface FieldSpec {
   /** The slot's label on the setup page and in messages, and the name `guessBindings` looks for. Resolution itself never uses it. */
   name: string;
-  /** Pinned field UUID: the default for accounts with no binding for this slot. An account's binding overrides it. */
+  /** Pinned field UUID: the default for accounts with no binding for this slot. An account's binding overrides it. Single-account apps only. */
   id?: string;
-  /** Expected public type(s). The setup page offers only fields of these types, and a bound or pinned field of another type is rejected. */
+  /**
+   * Expected public type(s), as the Open API reports them (`DATETIME`,
+   * `SINGLE_SELECT`, `LINK_TO_USER`…). The setup page offers only fields of
+   * these types, and a bound or pinned field of another type is rejected. The
+   * install manifest needs exactly one.
+   */
   type?: string | string[];
   /** When true, the app cannot work without it and `ready` is false while it is unresolved. */
   required?: boolean;
+  /** Install: one line on what the app uses this for, shown to the admin installing it. */
+  purpose?: string;
+  /** Install: other names accounts commonly give this field ("Payroll ID" for "Employee ID"). */
+  synonyms?: string[];
+  /** Install: offer to create the field when the account has nothing that fits. */
+  createIfMissing?: boolean;
+  /** Install: whether the app writes this field (the match must then be writable). Defaults to 'read'. */
+  access?: 'read' | 'write';
+  /** Install, select fields: the options the app relies on, by name. */
+  options?: string[];
+  /** Install, link fields: holds several records rather than one. Defaults to false. */
+  multiple?: boolean;
+  /** Install, `CUSTOM_FIELD` links: the key of the collection spec it points at. */
+  links?: string;
 }
 
 export interface CollectionSpec {
   /** The slot's label, and the name `guessBindings` looks for. Resolution itself never uses it. */
   name: string;
-  /** Pinned collection UUID: the default for accounts with no binding. */
+  /** Pinned collection UUID: the default for accounts with no binding. Single-account apps only. */
   id?: string;
   /** Defaults to true — most apps cannot do anything without their collections. */
   required?: boolean;
+  /** Install: set for a built-in collection. Leave out for a custom one, matched by name. */
+  standard?: StandardCollection;
+  /** Install: what the app uses this collection for. */
+  purpose?: string;
+  /** Install: other names accounts commonly give this collection. */
+  synonyms?: string[];
   fields: Record<string, FieldSpec>;
 }
 

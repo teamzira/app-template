@@ -14,6 +14,7 @@ These files exist only as a working demonstration of how to read Teambridge data
 - `app/create-shift-modal.tsx` — sample modal (delete or replace)
 - `app/actions.ts` — sample server action (delete or replace)
 - `app/schema.ts` — sample schema spec (replace with your app's collections and fields)
+- `teambridge.manifest.ts` — sample install manifest (replace the slug, title and summary)
 
 When the user starts building their actual app, **replace this content** before adding real features. Don't extend the demo — start fresh from these files.
 
@@ -332,9 +333,8 @@ import { defineSchema } from '@/lib/teambridge/schema';
 export const schema = defineSchema({
   shifts: {
     name: 'Shifts',
-    id: '6d1f…',                                   // pin once known
     fields: {
-      start:    { name: 'Start Time', type: 'DATETIME', required: true, id: 'a41c…' },
+      start:    { name: 'Start Time', type: 'DATETIME', required: true },
       location: { name: 'Location', type: 'LINK_TO_LOCATION' },
     },
   },
@@ -346,7 +346,8 @@ const resolved = await requireSetup(getTBClient({ accountId }), schema); // the 
 const start = resolved.collections.shifts.fields.start; // Field; required, so never null here
 ```
 
-- **Ids resolve, names guess.** A slot resolves from the id bound to it for the account, or from the `id` pinned in the spec as the default; the resolver never looks a collection or field up by name. Names are used once, by `guessBindings`, to make a good-faith first guess at an account's bindings (the one collection or field with the slot's name and type), which is saved as ids. After that a rename in Teambridge ("Location" becomes "Facility") changes nothing. Pin ids when the app is built for a known account; other accounts get the guess and correct it in setup (see "Per-account configuration").
+- **Ids resolve, names guess.** A slot resolves from the id bound to it for the account, or from the `id` pinned in the spec as the default; the resolver never looks a collection or field up by name. Names are used once, by `guessBindings`, to make a good-faith first guess at an account's bindings (the one collection or field with the slot's name and type), which is saved as ids. After that a rename in Teambridge ("Location" becomes "Facility") changes nothing. Every account has different ids, so pin them only in an app built for one account; other accounts get the guess and correct it in setup (see "Per-account configuration").
+- **Keys are forever.** The spec keys (`shifts`, `start`) are the app's names for these things, and they are the requirement keys every installed account's mapping is stored under (see "Install manifest"). Rename the `name` freely; don't rename a key.
 - **Give every slot a `type`.** The setup page offers only fields of that type, which is also what tells apart two fields sharing a name (a BOOLEAN and a MULTI_SELECT both called "Affiliate Vendor"), and a bound or pinned field of another type is rejected (`wrong-type`). A slot without a type offers every field.
 - **Name slots the way the account does.** The name is what the guess looks for and what the admin sees next to the picker, so look at a real field list before choosing it: "Roles", not "role"; "Location", not "facility". A slot that is unresolved is always `null`, so every read of it silently yields nothing; the resolver reports it in `issues` instead.
 - **Resolve with the app's own access** (`getTBClient({ accountId })`, no user context). The schema is account structure, not user data. `resolveSchema` caches it per account, keyed by the client's `accountId`; never key anything on `userContext`, which is re-signed on every request, so nothing would ever hit.
@@ -357,7 +358,49 @@ Accounts differ, so plan for the one that lacks a field the app wants:
 
 1. Mark it `required: true` only if the app truly can't work without it. Otherwise leave it optional and degrade the feature that uses it: hide the column, disable the action.
 2. Pages call `requireSetup()` first (see "Per-account configuration"). While a required slot is unresolved it sends the user to the setup page, where an admin binds the slot to whichever collection or field their account has for it, whatever it is called. Non-blocking issues stay in `resolved.issues`: render `<SetupNotice issues={resolved.issues} />` (`components/setup-notice.tsx`) and degrade.
-3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values. The setup page lets an admin pick any field of the right type; it can't create one. Creating the missing fields during app onboarding is planned, but not built yet.
+3. When building, **tell the user** which fields their account is missing and what type each should be. Don't invent a substitute field, repurpose a similarly named one, or hard-code values. The setup page lets an admin pick any field of the right type; it can't create one. Teambridge's install review can, for a slot marked `createIfMissing`.
+4. Give the spec entry what an installer needs — `purpose`, `synonyms`, and `createIfMissing: true` for a field it's fine to add — so the install flow can find it under another name or offer to create it (see "Install manifest").
+
+### Install manifest
+
+Before an app is installed, Teambridge's install service checks the account for everything the app needs: it matches each collection and field to what the account already has (by kind, name, synonyms and type), offers to create missing fields, lets the admin confirm, and records the mapping. The app declares what it needs in `teambridge.manifest.ts`, which wraps the schema spec — so the code that reads a field and the manifest that installs it are the same declaration:
+
+```ts
+// teambridge.manifest.ts (repo root — `app/manifest.ts` is Next's web app manifest, a different thing)
+import { defineAppManifest } from '@/lib/teambridge/manifest';
+import { schema } from './app/schema';
+
+export default defineAppManifest({
+  slug: 'shifts-dashboard',        // the app's APP_SLUG
+  title: 'Shifts dashboard',
+  summary: 'Lists shifts with their assignees and creates new ones.',
+  requires: schema,
+  workflows: [{ template: 'shift-reminder' }], // optional; see below
+});
+```
+
+What each spec entry contributes:
+
+| Spec | Manifest |
+|---|---|
+| collection `standard: 'user'` (or `shift`, `location`, `role`, `job`, `placement`, …) | Matched to the built-in collection, whatever the account calls it |
+| collection without `standard` | A custom collection, matched by `name` and `synonyms`. The installer can't create collections, so a missing one is set up by hand |
+| field `type` (exactly one, Open API name) | The field type to match and, if allowed, create. System-managed types (COMPUTED, AGGREGATE, ADDRESS…) can't be declared |
+| `required` | A missing required field blocks install; an optional one can be skipped |
+| `access: 'write'` | Only writable fields match |
+| `createIfMissing: true` | The installer may create it when nothing fits |
+| `options: ['Open', 'Filled']` on a select | The options the app relies on, matched or created too |
+| `multiple: true` on a link | A multi link (several records) |
+| `links: '<collection key>'` on a `CUSTOM_FIELD` | Which declared collection the link points at |
+| `purpose`, `synonyms` | Shown to the admin; synonyms also match fields named differently ("Payroll ID" for "Employee ID") |
+
+A link field's target collection is added automatically (`std.user` for a `LINK_TO_USER`) when the spec doesn't declare it.
+
+**Generate and commit it.** `yarn manifest` writes `teambridge.manifest.json` in the install service's format. Commit it, so a change to what the app needs shows up in review. `yarn build` runs `yarn manifest:check` first and fails if the file is stale. Any spec problem — a field without exactly one `type`, a system-managed type, `options` on a non-select — fails the command with every problem listed.
+
+**Workflows.** `workflows` lists workflow templates (by template-library slug) to install with the app. The manifest records them now; the install service will offer them in the same install once it supports that.
+
+**The app doesn't read the install's mapping back yet.** It resolves from its own bindings (see "Per-account configuration"), whose first guess matches by `name` only, so `synonyms` don't help it — keep `name` equal to what the account calls the field.
 
 ### Collection name matching
 
@@ -595,12 +638,16 @@ app/
   api/teambridge/
     install/route.ts  # Lifecycle webhooks (advisory; install returns setupPath when needed)
     uninstall/route.ts
+teambridge.manifest.ts    # ⚠ Example — install manifest (slug, title, summary, requires)
+teambridge.manifest.json  # Generated by `yarn manifest` — commit it
+scripts/manifest.ts   # The generator
 components/ui/        # shadcn primitives (own them, edit freely)
 components/setup-notice.tsx  # Notice for optional slots an account hasn't set, linking to Settings; every page renders it
 lib/
   teambridge/         # Teambridge integration — keep
     client/           # TBClient (token cache, filters, listAll, TBApiError)
     schema.ts         # defineSchema / resolveSchema (by id) / guessBindings (by name, once) / invalidateSchema / toWriteValue / readIds
+    manifest.ts       # defineAppManifest / buildRequirementManifest
     config-store.ts   # Per-account config behind ConfigStore (Postgres via Neon when DATABASE_URL is set, else memory)
     setup.ts          # resolveAccountSchema / requireSetup (the gate) / initializeAccount (first-contact guess) / settingsEnabled / SETUP_PATH
     lookup.ts         # lookupNames: display names for linked records, cached per account
