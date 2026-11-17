@@ -269,6 +269,25 @@ export interface Location {
 }
 
 /**
+ * What Teambridge recorded about the calling app on the client's account
+ * (`GET /v1/apps/self/bindings`): the admin's answer to each of the app's
+ * manifest requirements, made when the app was installed or its setup was
+ * re-reviewed in the App Library.
+ */
+export interface AppBindings {
+  /** The app's slug in Teambridge's registry, or null when the client isn't a registered app. */
+  slug: string | null;
+  /**
+   * Requirement key → id in this account: a collection id for `shifts` or
+   * `std.user`, a field id for `shifts.start`, a select-option id for
+   * `shifts.status.open`. A key that is absent was never answered or was
+   * skipped. Empty for an account where the app was installed before
+   * Teambridge recorded bindings.
+   */
+  bindings: Record<string, string>;
+}
+
+/**
  * Timezone data
  */
 export interface Timezone {

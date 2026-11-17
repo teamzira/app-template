@@ -1,29 +1,43 @@
 /**
- * The notice for optional slots an account hasn't set, with a link to
- * Settings to set them. Every page renders it above its content after
- * `requireSetup` (AGENTS.md → "Per-account configuration" → "The gate"):
+ * The notice for optional slots an account hasn't set, with a link to where
+ * they are set. Every page renders it above its content after `requireSetup`
+ * (AGENTS.md → "Per-account configuration" → "The gate"):
  *
  *   const resolved = await requireSetup(getTBClient({ accountId }), schema);
  *   …
- *   <SetupNotice issues={resolved.issues} />
+ *   <SetupNotice resolved={resolved} />
+ *
+ * The link goes to the app's own Settings, or, when Teambridge holds the
+ * account's bindings (`resolved.teambridgeSlug`), to the app's setup in
+ * Teambridge's App Library, which the host opens in place of the app
+ * (`TBSetupLink`).
  *
  * It renders nothing when nothing needs saying: "Not used" is an admin's own
  * choice, not a problem, and required slots never reach a page (the gate
- * sends the user to Settings first). On a deployment without Settings (no
- * database in production) it always renders nothing: the people using the
- * app can't change anything there, so the features that need an optional
- * slot just stay off, and the app says nothing about why.
+ * sends the user to setup first). On a deployment without Settings (no
+ * database in production) and no bindings in Teambridge it always renders
+ * nothing: the people using the app can't change anything there, so the
+ * features that need an optional slot just stay off, and the app says
+ * nothing about why.
  *
- * A server component: it reads the environment to tell the two cases apart.
+ * A server component: it reads the environment to tell the cases apart.
  */
 import Link from 'next/link';
 import { AlertTriangleIcon } from 'lucide-react';
+import { TBSetupLink } from '@/lib/teambridge/router';
 import { SETUP_PATH, settingsEnabled } from '@/lib/teambridge/setup';
-import type { SchemaIssue } from '@/lib/teambridge/schema';
+import type { ResolvedSchema, SchemaSpec } from '@/lib/teambridge/schema';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-export function SetupNotice({ issues, className }: { issues: SchemaIssue[]; className?: string }) {
-  if (!settingsEnabled()) return null;
+export function SetupNotice({
+  resolved,
+  className,
+}: {
+  resolved: Pick<ResolvedSchema<SchemaSpec>, 'issues' | 'teambridgeSlug'>;
+  className?: string;
+}) {
+  const { issues, teambridgeSlug } = resolved;
+  if (!teambridgeSlug && !settingsEnabled()) return null;
   const shown = issues.filter((issue) => issue.kind !== 'not-used');
   if (shown.length === 0) return null;
 
@@ -34,15 +48,25 @@ export function SetupNotice({ issues, className }: { issues: SchemaIssue[]; clas
       <AlertDescription>
         <ul className="mt-1 list-disc space-y-1 pl-4">
           {shown.map((issue) => (
-            <li key={`${issue.kind}/${issue.collection}/${issue.field ?? ''}`}>{issue.message}</li>
+            <li key={`${issue.kind}/${issue.collection}/${issue.field ?? ''}/${issue.option ?? ''}`}>{issue.message}</li>
           ))}
         </ul>
         <p className="mt-2">
-          Choose the collections and fields this app uses in{' '}
-          <Link href={SETUP_PATH} className="text-primary hover:underline">
-            Settings
-          </Link>
-          .
+          {teambridgeSlug ? (
+            <>
+              An admin can finish this app&apos;s setup in{' '}
+              <TBSetupLink className="text-primary hover:underline">Teambridge&apos;s App Library</TBSetupLink>
+              .
+            </>
+          ) : (
+            <>
+              Choose the collections and fields this app uses in{' '}
+              <Link href={SETUP_PATH} className="text-primary hover:underline">
+                Settings
+              </Link>
+              .
+            </>
+          )}
         </p>
       </AlertDescription>
     </Alert>

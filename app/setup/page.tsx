@@ -13,9 +13,15 @@
  * Anyone who can open the app can open this page: no role or permission
  * reaches the app from Teambridge yet, so there is nothing to check against.
  *
+ * When Teambridge holds the account's bindings (the admin mapped the app's
+ * requirements while installing it), setup is fixed there instead: the page
+ * lists what is unresolved and links to the app's setup in Teambridge's App
+ * Library, with no pickers of its own.
+ *
  * A production deployment without a database can't save what is chosen here,
  * so it has no Settings page (`settingsEnabled`): the nav hides the link, and
- * this route sends anyone who still arrives (an old link or bookmark) home.
+ * this route sends anyone who still arrives (an old link or bookmark) home,
+ * unless the account's setup is in Teambridge.
  */
 import { redirect } from 'next/navigation';
 import { AlertCircleIcon, AlertTriangleIcon } from 'lucide-react';
@@ -28,9 +34,11 @@ import {
   type TBClient,
 } from '@/lib/teambridge';
 import { configStore } from '@/lib/teambridge/config-store';
-import { guessBindings, type CollectionSpec, type SchemaBindings } from '@/lib/teambridge/schema';
-import { settingsEnabled } from '@/lib/teambridge/setup';
+import { TBSetupLink } from '@/lib/teambridge/router';
+import { guessBindings, type CollectionSpec, type SchemaBindings, type SchemaIssue } from '@/lib/teambridge/schema';
+import { resolveAccountSchema, settingsEnabled, teambridgeSetupFor } from '@/lib/teambridge/setup';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { schema } from '../schema';
 import {
   SetupForm,
@@ -41,10 +49,14 @@ import {
 } from './setup-form';
 
 export default async function SetupPage() {
-  if (!settingsEnabled()) redirect('/');
   const { accountId } = await getTBContext();
+  const credentials = getAppCredentials();
+  // Never throws: a failed read counts as no bindings, and the app's own setup applies.
+  const teambridgeSlug = credentials ? await teambridgeSetupFor(getTBClient({ accountId })) : null;
+  if (teambridgeSlug) return <TeambridgeSetup accountId={accountId} />;
+  if (!settingsEnabled()) redirect('/');
 
-  if (!getAppCredentials()) {
+  if (!credentials) {
     return (
       <SetupShell>
         <Alert>
@@ -104,15 +116,71 @@ export default async function SetupPage() {
   );
 }
 
-function SetupShell({ children }: { children: React.ReactNode }) {
+/**
+ * Setup for an account whose bindings Teambridge holds: what is still
+ * unresolved, and the way to the app's setup review in the App Library.
+ */
+async function TeambridgeSetup({ accountId }: { accountId: string }) {
+  let issues: SchemaIssue[] = [];
+  let error: string | null = null;
+  try {
+    issues = (await resolveAccountSchema(getTBClient({ accountId }), schema)).issues;
+  } catch (e) {
+    console.error('[Setup] resolving the schema', e);
+    error =
+      e instanceof TBApiError && e.isNotInstalled
+        ? "This app isn't installed on this account. Install it from the App Library, then reload."
+        : "Couldn't check this app's setup. Try again, and if it keeps happening check the app's installation.";
+  }
+  const shown = issues.filter((issue) => issue.kind !== 'not-used');
+
+  return (
+    <SetupShell description="This app's collections and fields were chosen when it was installed, in Teambridge's App Library. Change them there.">
+      {error ? (
+        <Alert variant="destructive">
+          <AlertCircleIcon />
+          <AlertTitle>Couldn&apos;t load settings</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : shown.length > 0 ? (
+        <Alert>
+          <AlertTriangleIcon />
+          <AlertTitle>Setup isn&apos;t finished</AlertTitle>
+          <AlertDescription>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              {shown.map((issue) => (
+                <li key={`${issue.kind}/${issue.collection}/${issue.field ?? ''}/${issue.option ?? ''}`}>
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <div>
+        <Button asChild variant={shown.length > 0 ? 'default' : 'outline'}>
+          <TBSetupLink>Open setup in the App Library</TBSetupLink>
+        </Button>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Once you&apos;ve saved there, Teambridge brings you back to this app.
+        </p>
+      </div>
+    </SetupShell>
+  );
+}
+
+function SetupShell({
+  children,
+  description = 'Choose the collections and fields this app reads and writes on this account. Anything marked required has to be set before the app can run; the rest switches a feature on or off.',
+}: {
+  children: React.ReactNode;
+  description?: string;
+}) {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose the collections and fields this app reads and writes on this account. Anything marked
-          required has to be set before the app can run; the rest switches a feature on or off.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {children}
     </div>

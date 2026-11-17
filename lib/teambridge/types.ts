@@ -1,3 +1,5 @@
+import type { AppManifest } from './manifest';
+
 /**
  * Context extracted from Teambridge proxy headers
  */
@@ -54,6 +56,14 @@ export interface TBInstallPayload {
   accountId: string;
   /** The account's display name, for logs and setup copy. */
   accountName?: string;
+  /**
+   * Hash of the app manifest the admin reviewed for this account (the
+   * manifest route's ETag, without quotes). Sent when the install, or a
+   * re-review of an installed app's setup, went through a manifest; absent
+   * otherwise. Compare with `manifestHash(manifest)` to tell an account that
+   * is behind the app's current manifest.
+   */
+  manifestVersion?: string;
 }
 
 /**
@@ -75,9 +85,29 @@ export interface TBHandlerConfig {
 }
 
 /**
+ * Install handler configuration
+ */
+export interface TBInstallHandlerConfig extends TBHandlerConfig {
+  /**
+   * The app's install manifest (`teambridge.manifest.ts`). When given, the
+   * handler compares it with the manifest the account was installed against
+   * and sets `manifestOutdated` on the context.
+   */
+  manifest?: AppManifest;
+}
+
+/**
  * Install handler context passed to the callback
  */
-export type TBInstallContext = TBInstallPayload;
+export type TBInstallContext = TBInstallPayload & {
+  /**
+   * True when the account was installed against an older manifest than the
+   * app's current one, so fields added since may be missing there. Undefined
+   * when either side is unknown (no `manifest` in the config, or Teambridge
+   * didn't send `manifestVersion`).
+   */
+  manifestOutdated?: boolean;
+};
 
 /**
  * What the install callback returns. The webhook is advisory: the

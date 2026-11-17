@@ -30,6 +30,14 @@ export interface AccountConfig {
   bindings?: SchemaBindings;
   /** When the config was last saved, ISO 8601. Shown on the settings page. */
   updatedAt?: string;
+  /**
+   * The last install, or re-review of the app's setup, in Teambridge, as
+   * the install hook saw it. `reviewedAt` changes on every one, so every
+   * server instance rereads Teambridge's bindings for the account
+   * (`loadTeambridgeBindings` in `./bindings`); `manifestVersion` is the
+   * manifest the admin reviewed, when Teambridge sent one.
+   */
+  teambridgeSetup?: { reviewedAt: string; manifestVersion?: string };
 }
 
 export interface ConfigStore {

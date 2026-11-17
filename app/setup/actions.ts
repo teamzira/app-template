@@ -40,7 +40,9 @@ export async function saveSetup(input: SchemaBindings): Promise<{ ok: true } | {
     if (blocking.length > 0) {
       return { error: blocking.map((issue) => issue.message).join(' ') };
     }
-    await configStore.set(accountId, { bindings, updatedAt: new Date().toISOString() });
+    // Keep the rest of the account's config (the install hook's record of its Teambridge setup).
+    const current = await configStore.get(accountId);
+    await configStore.set(accountId, { ...current, bindings, updatedAt: new Date().toISOString() });
   } catch (e) {
     console.error('[saveSetup]', e);
     return {

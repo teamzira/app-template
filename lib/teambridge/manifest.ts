@@ -1,3 +1,4 @@
+import { optionKey } from './bindings';
 import type { CollectionSpec, SchemaSpec, StandardCollection } from './schema';
 
 /**
@@ -51,17 +52,18 @@ export interface Requirement {
   kind: RequirementKind;
   parentKey?: string;
   label: string;
+  /** Polymorphic on `descriptorKind`, the JSON property zserver's `RequirementDescriptor` switches on. */
   descriptor:
-    | { kind: 'collection'; collectionType: StandardCollection | 'custom' }
+    | { descriptorKind: 'collection'; collectionType: StandardCollection | 'custom' }
     | {
-        kind: 'field';
+        descriptorKind: 'field';
         type: string;
         inputMode: string;
         refCollectionKey?: string;
         optionKeys?: string[];
         constraints?: FieldConstraint[];
       }
-    | { kind: 'selectOption' };
+    | { descriptorKind: 'selectOption' };
   purpose?: string;
   synonyms: string[];
   required: boolean;
@@ -129,15 +131,6 @@ const STANDARD_LABELS: Record<StandardCollection, string> = {
   pay_periods: 'Pay Periods',
 };
 
-/** `Expiring soon` → `expiring_soon`, for option keys. */
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
 /**
  * Converts an app manifest to the install service's `RequirementManifest`.
  * Throws with every problem at once, so a bad spec is fixed in one pass.
@@ -173,7 +166,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         key,
         kind: 'COLLECTION',
         label: STANDARD_LABELS[standard],
-        descriptor: { kind: 'collection', collectionType: standard },
+        descriptor: { descriptorKind: 'collection', collectionType: standard },
         purpose: `Linked to from this app's fields.`,
         synonyms: [],
         required,
@@ -219,7 +212,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         }
       }
 
-      const options = (field.options ?? []).map((label) => ({ key: `${key}.${slugify(label)}`, label }));
+      const options = (field.options ?? []).map((label) => ({ key: `${key}.${optionKey(label)}`, label }));
       const optionKeys = options.map((option) => option.key);
       const constraints: FieldConstraint[] = [];
       if (field.access === 'write') constraints.push('WRITABLE');
@@ -232,7 +225,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
         parentKey: collectionKey,
         label: field.name,
         descriptor: {
-          kind: 'field',
+          descriptorKind: 'field',
           type: mapped.type,
           inputMode: isLink && field.multiple ? 'multi' : mapped.inputMode,
           ...(refCollectionKey ? { refCollectionKey } : {}),
@@ -251,7 +244,7 @@ export function buildRequirementManifest(manifest: AppManifest): RequirementMani
           kind: 'SELECT_OPTION',
           parentKey: key,
           label: option.label,
-          descriptor: { kind: 'selectOption' },
+          descriptor: { descriptorKind: 'selectOption' },
           purpose: `An option of ${field.name}.`,
           synonyms: [],
           // An option the app relies on is as required as its field.
@@ -293,7 +286,7 @@ function collectionRequirement(key: string, collection: CollectionSpec, required
     key,
     kind: 'COLLECTION',
     label: collection.name,
-    descriptor: { kind: 'collection', collectionType: collection.standard ?? 'custom' },
+    descriptor: { descriptorKind: 'collection', collectionType: collection.standard ?? 'custom' },
     ...(collection.purpose ? { purpose: collection.purpose } : {}),
     synonyms: collection.synonyms ?? [],
     required,

@@ -9,6 +9,7 @@ import type {
   DataRecord,
   Timezone,
   Document,
+  AppBindings,
   DocumentUploadOptions,
 } from './types';
 
@@ -519,6 +520,44 @@ export class TBClient {
         `/v1/users/${userId}/locations`
       );
       return this.unwrapList(response, 'locations');
+    },
+  };
+
+  /**
+   * The calling app itself, as Teambridge knows it.
+   */
+  apps = {
+    /**
+     * The bindings Teambridge recorded for this app on the client's account:
+     * which collection, field or select option the admin mapped each manifest
+     * requirement to. Use the app's own access (`getTBClient({ accountId })`).
+     *
+     * A 404 means the client isn't a registered app (a dev client, say); that
+     * answers as no bindings rather than an error. Prefer
+     * `resolveAccountSchema`, which applies these for you and caches them.
+     *
+     * Teambridge serves them from a replica. Pass `{ fresh: true }` for the
+     * one read straight after an install hook, which must see the setup that
+     * hook announced.
+     */
+    getBindings: async ({ fresh = false }: { fresh?: boolean } = {}): Promise<AppBindings> => {
+      let response: { slug?: unknown; bindings?: unknown } | null;
+      try {
+        response = await this.request<{ slug?: unknown; bindings?: unknown } | null>(
+          'GET',
+          fresh ? '/v1/apps/self/bindings?fresh=true' : '/v1/apps/self/bindings'
+        );
+      } catch (error) {
+        if (error instanceof TBApiError && error.status === 404) return { slug: null, bindings: {} };
+        throw error;
+      }
+      const bindings: Record<string, string> = {};
+      if (response?.bindings && typeof response.bindings === 'object') {
+        for (const [key, id] of Object.entries(response.bindings)) {
+          if (typeof id === 'string' && id) bindings[key] = id;
+        }
+      }
+      return { slug: typeof response?.slug === 'string' && response.slug ? response.slug : null, bindings };
     },
   };
 

@@ -10,7 +10,7 @@
       "kind": "COLLECTION",
       "label": "Shifts",
       "descriptor": {
-        "kind": "collection",
+        "descriptorKind": "collection",
         "collectionType": "custom"
       },
       "purpose": "The shifts the dashboard lists and creates.",
@@ -24,7 +24,7 @@
       "parentKey": "shifts",
       "label": "Start Time",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "datetime",
         "inputMode": "plain",
         "constraints": [
@@ -45,7 +45,7 @@
       "parentKey": "shifts",
       "label": "End Time",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "datetime",
         "inputMode": "plain",
         "constraints": [
@@ -66,7 +66,7 @@
       "parentKey": "shifts",
       "label": "Assignee",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "user",
         "inputMode": "single",
         "refCollectionKey": "users",
@@ -89,7 +89,7 @@
       "parentKey": "shifts",
       "label": "Published",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "boolean",
         "inputMode": "plain"
       },
@@ -103,7 +103,7 @@
       "kind": "COLLECTION",
       "label": "Users",
       "descriptor": {
-        "kind": "collection",
+        "descriptorKind": "collection",
         "collectionType": "user"
       },
       "synonyms": [],
@@ -116,7 +116,7 @@
       "parentKey": "users",
       "label": "First Name",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "text",
         "inputMode": "plain"
       },
@@ -131,7 +131,7 @@
       "parentKey": "users",
       "label": "Last Name",
       "descriptor": {
-        "kind": "field",
+        "descriptorKind": "field",
         "type": "text",
         "inputMode": "plain"
       },

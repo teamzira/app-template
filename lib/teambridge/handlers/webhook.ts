@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
 import type { TBHandlerConfig } from '../types';
+import { hasValidSignature, isTimestampTooOld } from './signature';
 
 const DEFAULT_MAX_REQUEST_AGE = 300;
 
@@ -10,41 +10,15 @@ const DEFAULT_MAX_REQUEST_AGE = 300;
  * requests. The two sign different things: the proxy signs the request path,
  * a webhook signs its body. Here `X-TB-Signature` is the hex HMAC-SHA256 of
  * `{X-TB-Timestamp}.{raw body}`. The body is JSON:
- * `{ event: 'installed' | 'uninstalled', accountId, accountName?, timestamp }`.
+ * `{ event: 'installed' | 'uninstalled', accountId, accountName?, manifestVersion?, timestamp }`.
  *
  * Teambridge posts them to `/api/teambridge/install/` and
  * `/api/teambridge/uninstall/` under the app's base URL, trailing slash
  * included: `trailingSlash: true` in `next.config.ts` answers the slash-less
  * form with a 308, which never reaches the handler.
+ *
+ * The signature check itself is shared with the manifest route (`./signature`).
  */
-function validateWebhookSignature(
-  webhookSecret: string,
-  timestamp: string,
-  body: string,
-  signature: string
-): boolean {
-  const message = `${timestamp}.${body}`;
-  const expectedSignature = createHmac('sha256', webhookSecret)
-    .update(message)
-    .digest('hex');
-
-  try {
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** Replay protection: `timestamp` is Unix seconds, as on proxied requests. */
-function isRequestTooOld(timestamp: string, maxAge: number): boolean {
-  const requestTime = Number.parseInt(timestamp, 10);
-  if (Number.isNaN(requestTime)) return true;
-  const now = Math.floor(Date.now() / 1000);
-  return now - requestTime > maxAge;
-}
 
 export type VerifiedWebhook<T> =
   | { ok: true; payload: T }
@@ -68,12 +42,13 @@ export async function verifyWebhook<T>(
   if (!timestamp || !signature) {
     return refuse(401, 'Missing required headers');
   }
-  if (isRequestTooOld(timestamp, config.maxRequestAge ?? DEFAULT_MAX_REQUEST_AGE)) {
+  // Replay protection: `timestamp` is Unix seconds, as on proxied requests.
+  if (isTimestampTooOld(timestamp, config.maxRequestAge ?? DEFAULT_MAX_REQUEST_AGE)) {
     return refuse(401, 'Request too old');
   }
 
   const bodyText = await request.text();
-  if (!validateWebhookSignature(config.webhookSecret, timestamp, bodyText, signature)) {
+  if (!hasValidSignature(config.webhookSecret, `${timestamp}.${bodyText}`, signature)) {
     return refuse(401, 'Invalid signature');
   }
 
