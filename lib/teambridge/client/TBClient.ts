@@ -369,16 +369,18 @@ export class TBClient {
           data?: unknown;
           page?: number;
           size?: number;
-          totalCount?: number;
+          hasMore?: boolean;
         }>('GET', `/v1/collections/${collectionId}/records`, {
           params: this.paginationParams(options),
         });
         const data = this.normalizeRecordsData(response.data ?? response);
+        const size = response.size ?? options?.pageSize ?? data.length;
         return {
           data: data as DataRecord[],
           page: response.page ?? 0,
-          size: response.size ?? data.length,
-          totalCount: response.totalCount ?? data.length,
+          size,
+          // The API reports `hasMore` and no total; a full page is the only hint without it.
+          hasMore: response.hasMore ?? (size > 0 && data.length >= size),
         };
       },
 
@@ -387,11 +389,15 @@ export class TBClient {
        * time, up to `maxPages`. Filter server-side — a full scan of a large
        * collection (Users, Shifts, Locations) takes seconds and burns the
        * 720 requests/minute rate limit shared by every request this app makes.
+       *
+       * The API reports `hasMore` per page rather than a total, so readers
+       * keep taking pages until one says it is the last. A reader already
+       * waiting on a page past the end gets an empty page back, which is fine.
        */
       listAll: async (
         collectionId: string,
         options?: ListAllRecordsOptions
-      ): Promise<{ data: DataRecord[]; totalCount: number; truncated: boolean }> => {
+      ): Promise<{ data: DataRecord[]; truncated: boolean }> => {
         const maxPages = options?.maxPages ?? 20;
         const readPage = (page: number) =>
           this.collections.records.list(collectionId, {
@@ -401,33 +407,37 @@ export class TBClient {
           });
 
         const first = await readPage(0);
-        const totalPages = Math.ceil(first.totalCount / MAX_PAGE_SIZE);
-        const pagesToRead = Math.min(totalPages, maxPages);
+        const pages: DataRecord[][] = [first.data];
+        // The scan ends at the first page that says no more follow.
+        let lastPage = first.hasMore ? Infinity : 0;
+        let moreAfterCap = false;
 
         // A pool of LIST_ALL_CONCURRENCY readers: each takes the next page as
         // soon as its last one lands, so one slow page doesn't stall a batch.
-        const pages: DataRecord[][] = [first.data];
         let nextPage = 1;
         const reader = async () => {
-          while (nextPage < pagesToRead) {
+          while (nextPage <= lastPage && nextPage < maxPages) {
             const page = nextPage++;
-            pages[page] = (await readPage(page)).data;
+            const result = await readPage(page);
+            pages[page] = result.data;
+            if (!result.hasMore) lastPage = Math.min(lastPage, page);
+            else if (page === maxPages - 1) moreAfterCap = true;
           }
         };
-        await Promise.all(Array.from({ length: Math.max(0, Math.min(LIST_ALL_CONCURRENCY, pagesToRead - 1)) }, reader));
-        const data = pages.flat();
+        if (first.hasMore) await Promise.all(Array.from({ length: LIST_ALL_CONCURRENCY }, reader));
+        const data = pages.slice(0, lastPage === Infinity ? undefined : lastPage + 1).flat();
 
-        const truncated = totalPages > maxPages;
+        const truncated = moreAfterCap || (maxPages === 1 && first.hasMore);
         if (truncated) {
           console.warn(
-            `[Teambridge] listAll(${collectionId}) stopped at ${maxPages} pages of ${totalPages}; ` +
+            `[Teambridge] listAll(${collectionId}) stopped at ${maxPages} pages with more to read; ` +
               'filter server-side or page the view instead of scanning.'
           );
         }
 
         // Pages can overlap if records are written mid-scan; dedupe by id.
         const byId = new Map(data.map((record) => [record.id, record]));
-        return { data: [...byId.values()], totalCount: first.totalCount, truncated };
+        return { data: [...byId.values()], truncated };
       },
 
       /**
