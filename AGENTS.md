@@ -272,7 +272,7 @@ Include `accountId` in every cache key, alongside the user, filters and page.
 
 ### API constraints
 
-- **Page size limit**: the Teambridge API enforces a max of **50 records per page** (default 20). The template client forwards `pageSize` as the API's `size` query param; it does not clamp the value for you. Never request more than 50 in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until either `data.length < 50` or you've consumed `totalCount`.
+- **Page size limit**: the Teambridge API enforces a max of **50 records per page** (default 20). The template client forwards `pageSize` as the API's `size` query param; it does not clamp the value for you. Never request more than 50 in a single call. To fetch all records, loop with `pageSize: 50`, incrementing `page` (0-indexed), until a page comes back with `hasMore: false`, or use `listAll`. The API reports no total count.
 
 ### User-scoped Teambridge clients
 
@@ -424,7 +424,7 @@ await client.collections.records.list(shifts.id, {
 
 - Keys are `{fieldUUID}_{op}`, never the field name. Up to 10 filters, combined with AND. There is **no OR** (e.g. first name OR last name takes one request per field) and **no sort parameter**, so sort in the route.
 - **Not filterable:** COMPUTED fields (Created At, etc.), native system selects (they report as `SINGLE_SELECT` just like custom ones, so you can't tell from the field list), native system fields such as access groups, and ADDRESS, FILE, GEOFENCE, AGGREGATE, DATETIME_RANGE.
-- **A bad filter isn't always an error.** An unsupported field type returns 400 `UNSUPPORTED_FIELD_TYPE`, but an **operator that doesn't exist** (`_in`, `_has`, `_includes`) is accepted and **silently ignored**, returning everything. Use only the operators above, and the first time you filter on a field, check that `totalCount` actually dropped. If a field can't be filtered, narrow with the filters that do work, then filter the rest in the API route, paging with `listAll`.
+- **A bad filter isn't always an error.** An unsupported field type returns 400 `UNSUPPORTED_FIELD_TYPE`, but an **operator that doesn't exist** (`_in`, `_has`, `_includes`) is accepted and **silently ignored**, returning everything. Use only the operators above, and the first time you filter on a field, check that the filter actually narrowed what came back. If a field can't be filtered, narrow with the filters that do work, then filter the rest in the API route, paging with `listAll`.
 
 ### Writing values
 

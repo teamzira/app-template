@@ -111,7 +111,8 @@ export interface PaginatedResponse<T> {
   data: T[];
   page: number;
   size: number;
-  totalCount: number;
+  /** Whether a later page has more records. The API reports no total count. */
+  hasMore: boolean;
 }
 
 /**

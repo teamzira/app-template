@@ -77,7 +77,7 @@ export default async function Home({
   let error: string | null = null;
   let setupIssues: SchemaIssue[] = [];
   let allShifts: MappedShift[] = [];
-  let totalShiftCount = 0;
+  let moreShifts = false;
   const userNames: Record<string, string> = {};
   const usersList: { id: string; name: string }[] = [];
 
@@ -114,7 +114,7 @@ export default async function Home({
           client.collections.records.list(shifts.id, { page: 0, pageSize: 50 }),
           usersId ? client.collections.records.list(usersId, { page: 0, pageSize: 50 }) : null,
         ]);
-        totalShiftCount = response.totalCount;
+        moreShifts = response.hasMore;
         allShifts = response.data.map((record) => {
           const rawPublished = published ? record[published.id] : undefined;
           return {
@@ -290,9 +290,9 @@ export default async function Home({
           )}
         </CardContent>
 
-        {totalShiftCount > 0 && (
+        {allShifts.length > 0 && (
           <CardFooter className="text-xs text-muted-foreground">
-            Showing {filteredShifts.length} of {totalShiftCount} shifts
+            Showing {filteredShifts.length} of {allShifts.length} shifts{moreShifts && ', the first page'}
             {currentFilter !== 'all' && ` (filtered by ${currentFilter})`}
           </CardFooter>
         )}
