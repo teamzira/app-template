@@ -15,7 +15,8 @@ import type { Collection, Field } from './client/types';
  * Names are used once, to make a good-faith **guess** at the bindings:
  * `guessBindings` matches each slot to the one collection or field with the
  * same name (exact, case-insensitive) and type. It runs at first contact with
- * an account, whose result is saved as ids, and it prefills unset slots on
+ * an account, and for a slot added later on the account's next request; its
+ * result is saved as ids. It also prefills unset slots on
  * the setup page (`/setup/`), where an admin confirms or changes them. After
  * that a rename in Teambridge changes nothing. The spec's `name` is also the
  * slot's label on the setup page and in messages.
@@ -106,7 +107,7 @@ export interface ResolveSchemaOptions {
 /**
  * The reads a resolution makes — the account's collections, and the fields
  * of each collection it looks at — memoized, so that two steps over the same
- * account read each list once. First contact is the case: `guessBindings`
+ * account read each list once. A guess is the case: `guessBindings`
  * reads them to guess, and `resolveSchema` would read them again to resolve
  * from the guess; `initializeAccount` (`./setup`) hands both the same
  * structure instead. `guessBindings` and `resolveSchema` make their own when
@@ -533,8 +534,9 @@ export function matchFields<C extends CollectionSpec>(
  * with the slot's name (and type) is bound, and a name that matches nothing
  * or several things is left unset for the admin.
  *
- * `resolveAccountSchema` runs it on first contact with an account and saves
- * the result, so an account whose collections carry the expected names works
+ * `resolveAccountSchema` runs it on first contact with an account, and for
+ * slots the spec gains later, and saves the result, so an account whose
+ * collections carry the expected names works
  * without a visit to setup; the setup page runs it to prefill whatever is
  * still unset. Either way what is saved is ids, and from then on resolution
  * never looks at a name again.

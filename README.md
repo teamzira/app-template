@@ -231,7 +231,7 @@ The demo at `app/page.tsx` + `app/actions.ts` shows this workflow end-to-end, in
 
 ### Setup and settings
 
-Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids; `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button for several accounts arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL`, such as an app for one account, has no Settings page: it resolves each account from the ids pinned in `app/schema.ts`, or else the guess by name, and an account missing a required collection or field gets the page's ordinary error, with the reason in the server log. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
+Accounts name their collections and fields differently. `app/schema.ts` declares the slots the app uses; on first contact with an account the app makes a good-faith guess by name and saves the ids (and does the same for a slot added later, on each account's next request); `/setup/` lets an admin confirm or change each binding; and every page calls `requireSetup()` first, which resolves the schema from those ids and redirects to `/setup/` while a required slot is unresolved. Settings in the section nav reopens the page later. Bindings live in a per-account config store (`lib/teambridge/config-store.ts`): a Postgres table through the Neon integration when `DATABASE_URL` is set, which the deploy button for several accounts arranges, and memory otherwise, for development only. A production deployment without `DATABASE_URL`, such as an app for one account, has no Settings page: it resolves each account from the ids pinned in `app/schema.ts`, or else the guess by name, and an account missing a required collection or field gets the page's ordinary error, with the reason in the server log. See [`AGENTS.md`](./AGENTS.md) → "Per-account configuration".
 
 ### Handling Installation
 
@@ -333,7 +333,7 @@ readIds(value)                                        // link & select values �
 `@/lib/teambridge/setup` and `@/lib/teambridge/config-store` (both also exported from `@/lib/teambridge`):
 
 ```ts
-resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact
+resolveAccountSchema(client, spec)                    // resolveSchema with the account's saved bindings; guesses and saves them on first contact, and for slots added later
 requireSetup(client, spec)                            // same, and redirect('/setup/') while a required slot is unresolved (without a database: throws SchemaNotReadyError)
 settingsEnabled()                                     // false in a production build without a database: no Settings page
 initializeAccount(client, spec, structure?)           // the first-contact guess + save, on its own

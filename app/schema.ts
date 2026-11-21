@@ -5,9 +5,10 @@
  * `name` is the label an admin sees on the setup page, `type` is what its
  * picker offers, and `required` decides whether the app can run without it.
  * Slots resolve by id: the id bound for the account, or an `id` pinned here
- * as the default. The name is used once, at first contact with an account,
- * to guess the binding (the one collection or field with that name and
- * type); the admin confirms or corrects it in Settings. Pin ids once the app
+ * as the default. The name is used once per account, at first contact or,
+ * for a slot added later, on the account's next request, to guess the
+ * binding (the one collection or field with that name and type); the admin
+ * confirms or corrects it in Settings. Pin ids once the app
  * is built for a known account. See AGENTS.md → "Per-account configuration".
  */
 import { defineSchema } from '@/lib/teambridge/schema';

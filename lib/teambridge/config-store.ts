@@ -30,6 +30,12 @@ export interface AccountConfig {
   bindings?: SchemaBindings;
   /** When the config was last saved, ISO 8601. Shown on the settings page. */
   updatedAt?: string;
+  /**
+   * The slots the guess by name has been made for, as `collection` and
+   * `collection.field` keys, so each is guessed once (see
+   * `resolveAccountSchema`). Absent from configs saved before it existed.
+   */
+  guessedSlots?: string[];
 }
 
 export interface ConfigStore {
