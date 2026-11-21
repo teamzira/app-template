@@ -25,6 +25,7 @@ For changes in those areas, say plainly that they need checking in the embedded 
 - Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them. Each slot is guessed by name once per account (at first contact, or on the next request after the spec gains it), then bound by id; the setup page shows every slot prefilled with that guess for an admin to confirm. A slot with no `type` offers every field.
 - If the account is missing a field or collection the feature needs, tell the user which ones to add and with what type, and build the feature to degrade (see AGENTS.md → "When a field or collection doesn't exist"). Don't substitute a similarly named field.
 - Ask before assuming anything about business rules: which shifts count, which statuses mean "done", who should see what.
+- Pay rules belong to Teambridge, not the app (AGENTS.md → "Pay: Teambridge works it out"). If the account doesn't have one the app needs, say which setting to add; don't code the rule.
 
 ### Before you finish
 

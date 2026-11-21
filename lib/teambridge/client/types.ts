@@ -71,6 +71,21 @@ export type RecordFilters = Record<string, string | number | boolean | undefined
 export interface ListRecordsOptions extends PaginationOptions {
   /** Server-side filters — see {@link RecordFilters} */
   filters?: RecordFilters;
+  /**
+   * Shifts only: also return the pay Teambridge works out for each shift
+   * (hours, rate and pay for regular, overtime, double and holiday time, and
+   * the totals). Left out by default, since it adds about thirty fields to
+   * every shift. See AGENTS.md → "Pay".
+   */
+  includePayFields?: boolean;
+}
+
+/**
+ * Options for reading one record.
+ */
+export interface GetRecordOptions {
+  /** See {@link ListRecordsOptions.includePayFields}. */
+  includePayFields?: boolean;
 }
 
 /**
@@ -79,6 +94,8 @@ export interface ListRecordsOptions extends PaginationOptions {
 export interface ListAllRecordsOptions {
   /** Server-side filters — see {@link RecordFilters}. Filter here, not in JS. */
   filters?: RecordFilters;
+  /** See {@link ListRecordsOptions.includePayFields}. */
+  includePayFields?: boolean;
   /**
    * Hard stop, in pages of 50. Defaults to 20 (1,000 records). Hitting it logs
    * a warning and returns what was read, with `truncated: true` — a view that
