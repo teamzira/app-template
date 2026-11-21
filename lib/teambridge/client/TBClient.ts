@@ -3,6 +3,7 @@ import type {
   TokenResponse,
   ListRecordsOptions,
   ListAllRecordsOptions,
+  GetRecordOptions,
   PaginatedResponse,
   Collection,
   Field,
@@ -276,6 +277,7 @@ export class TBClient {
       ...options?.filters,
       page: options?.page,
       size: options?.pageSize, // API uses 'size', we accept 'pageSize' for ergonomics
+      includePayFields: options?.includePayFields || undefined,
     };
   }
 
@@ -402,6 +404,7 @@ export class TBClient {
         const readPage = (page: number) =>
           this.collections.records.list(collectionId, {
             filters: options?.filters,
+            includePayFields: options?.includePayFields,
             page,
             pageSize: MAX_PAGE_SIZE,
           });
@@ -445,11 +448,13 @@ export class TBClient {
        */
       get: async (
         collectionId: string,
-        recordId: string
+        recordId: string,
+        options?: GetRecordOptions
       ): Promise<DataRecord> => {
         const response = await this.request<Record<string, unknown>>(
           'GET',
-          `/v1/collections/${collectionId}/records/${recordId}`
+          `/v1/collections/${collectionId}/records/${recordId}`,
+          { params: { includePayFields: options?.includePayFields || undefined } }
         );
         if (!response || typeof response !== 'object' || Array.isArray(response)) {
           return response as unknown as DataRecord;

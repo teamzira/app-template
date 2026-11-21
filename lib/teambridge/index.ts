@@ -34,6 +34,7 @@ export type {
   PaginationOptions,
   ListRecordsOptions,
   ListAllRecordsOptions,
+  GetRecordOptions,
   RecordFilters,
   PaginatedResponse,
   Collection,

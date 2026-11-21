@@ -435,6 +435,34 @@ Encode every write with `toWriteValue(field, value)` from `@/lib/teambridge/sche
 - **DATETIME** needs a timezone: an ISO string ending in `Z` or an offset. Convert `<input type="datetime-local">` values **in the browser** (`new Date(v).toISOString()`), where the user's timezone is known. The server would read them in its own zone.
 - `update` sends only the fields you pass. Don't round-trip a whole record back.
 
+### Pay: Teambridge works it out
+
+Every rule that decides what someone is paid lives in Teambridge, never in an app: rates, overtime, holidays, breaks, penalties, minimums and differentials. Teambridge's pay engine applies them to every shift, and payroll reads its result. Pay an app works out for itself is a number payroll never sees, and two apps on one account working it out differently give two answers.
+
+Where each kind of rule goes:
+
+| Rule | In Teambridge |
+|---|---|
+| A role's rate | Default Rates |
+| A person's own rate, such as an apprentice rate or a raise from a date | The person's wage, with its effective date |
+| Overtime and double time | An overtime policy: daily and weekly limits, over the workweek the account's settings start |
+| Holidays | Holiday Pay |
+| Meals and rest breaks | Breaks, recorded by the time clock; the break policy says which are unpaid |
+| Anything else: meal and rest penalties, minimum or reporting-time pay, differentials, per diem | A currency field on Shifts that counts toward Total Pay, set by a pay rule (Payment Rules, beside Default Rates) |
+
+What a pay rule can do:
+
+- **Conditions read only fields on the shift.** A rule can't look at the person, the job role or the event, so copy what it needs onto the shift (a Rate type from the event, say) or name the people or roles in the condition. A rule's conditions are all AND or all OR.
+- **A custom condition is a Policy Builder violation**, for what a field can't say. A meal that started late, for example: a policy reads the shift's breaks (`get_breaks_for_shift`) and fails, and the pay rule pays the penalty. Pay reads the policy's stored result, so check on a test account that the policy has run by the time pay is worked out.
+- **An adjustment** sets a field, adds an amount or a percentage, or pays per unit of another field: one hour at the shift's rate is 1 per unit of Pay Rate.
+- **Formulas are Excel**: `IF`, `AND`, `MAX` and date arithmetic work, and date-times arrive in the account's time zone, so `(Clock Out Time - Clock In Time) * 24` is hours. They read number, currency and date-time fields, not yes/no or hours fields. **A formula that reads an empty field skips its rule**, so split the rule with `is empty` and `is not empty` conditions instead of testing for blanks in the formula. Pay 2.0 hands a shift that a formula rule matches back to Pay 1.0.
+
+In the app:
+
+- **Read pay; don't work it out.** Shifts read with `includePayFields: true` (`records.list`, `listAll` and `get`) carry Teambridge's hours, rates and pay for regular, overtime, double and holiday time, and Total Pay. Declare each one the app shows in `app/schema.ts` like any other slot, custom pay fields too: `totalPay: { name: 'Total Pay', type: 'CURRENCY' }`, `mealPremium: { name: 'Meal premium', type: 'CURRENCY' }`. Hours read as `NUMBER`.
+- **Explain pay, don't set it.** An app can flag a late meal or show why a shift was topped up, but the amount it shows is Teambridge's. Don't write Pay Rate or a pay field to change what someone earns: a Pay Rate written to a shift can be kept as set by hand, which stops pay rules from applying to it. Change the rate or the rule in Teambridge.
+- **A missing rule is a setting to add**, like a missing field: tell the user which one. Apps can't create pay rules (the Open API has none), and account templates can't install them yet.
+
 ### Performance
 
 Every Teambridge read is a network round trip from the app server, and the host adds its own boot time before the iframe even loads. Budget accordingly:
@@ -631,6 +659,7 @@ proxy.ts              # Request validation
 - Filtering or searching over a loaded page in JS when the API can filter, or full-scanning Users/Shifts/Locations per render.
 - Reading linked records one by one on every render to show their names, such as an assignee per shift. Use `lookupNames`.
 - Writing multi links as arrays, datetimes without a timezone, or read-only fields.
+- Working pay out in the app (overtime, penalties, minimums, holiday or differential rates), or writing a worked-out Pay Rate back. Teambridge's pay engine does it; read the result (see "Pay: Teambridge works it out").
 - Catching Teambridge errors and returning empty data.
 - Error copy that says the app can't connect to Teambridge.
 - Using `userContext` in a cache key, or leaving `accountId` out of one.
