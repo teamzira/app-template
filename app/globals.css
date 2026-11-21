@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Alloy, the Teambridge design system: its `alloy-*` colour and type utilities, its component
+   styles and its tokens. Tailwind only scans the app, so @source points it at Alloy's components
+   too, or the classes they use are never generated. */
+@import "@teamzira/alloy/theme";
+@import "@teamzira/alloy/styles";
+@import "@teamzira/alloy/tokens";
+@source "../node_modules/@teamzira/alloy/src";
+
 /* shadcn-compatible dark variant: enable `dark:` utilities anywhere
    inside an element with the .dark class. */
 @custom-variant dark (&:is(.dark *));
