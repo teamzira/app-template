@@ -168,8 +168,9 @@ export function SetupForm({
     e.preventDefault();
     setError(null);
     // Every slot is written: an id, or null for "Not used". A slot the spec
-    // gains later has no key yet; it is `not-set` (and prefilled with a
-    // guess here) until it is saved.
+    // gains later has no key until the account's next request guesses it
+    // (resolveAccountSchema); one the guess can't fill stays `not-set` until
+    // it is saved here.
     const bindings: SchemaBindings = {};
     for (const slot of slots) {
       bindings[slot.key] = {

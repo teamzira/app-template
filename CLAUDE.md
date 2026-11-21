@@ -22,7 +22,7 @@ For changes in those areas, say plainly that they need checking in the embedded 
 
 ### Ask about the account, don't guess
 
-- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them. Each slot is guessed by name once, at first contact with an account, then bound by id; the setup page shows every slot prefilled with that guess for an admin to confirm. A slot with no `type` offers every field.
+- Before writing code against a collection, look at its real field list (`getFields`), not the names you'd expect. Put what you find in `app/schema.ts`, with ids pinned once you have them. Each slot is guessed by name once per account (at first contact, or on the next request after the spec gains it), then bound by id; the setup page shows every slot prefilled with that guess for an admin to confirm. A slot with no `type` offers every field.
 - If the account is missing a field or collection the feature needs, tell the user which ones to add and with what type, and build the feature to degrade (see AGENTS.md → "When a field or collection doesn't exist"). Don't substitute a similarly named field.
 - Ask before assuming anything about business rules: which shifts count, which statuses mean "done", who should see what.
 

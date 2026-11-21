@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import type { TBClient } from './client/TBClient';
-import { configStore } from './config-store';
+import { configStore, type AccountConfig } from './config-store';
 import {
   guessBindings,
   invalidateSchema,
@@ -28,9 +28,9 @@ import {
  *
  * It reasons from `resolved.issues`, not from whether the account has saved
  * anything: an account set up last month is sent back when the spec gains a
- * new required slot, for just that slot, and an account whose collections
- * carry the expected names (or whose slots are pinned in the spec) never
- * sees the setup page at all. Non-blocking issues (an optional slot not set
+ * required slot the guess by name can't fill, for just that slot, and an
+ * account whose collections carry the expected names (or whose slots are
+ * pinned in the spec) never sees the setup page at all. Non-blocking issues (an optional slot not set
  * yet) don't redirect — show them with a `SetupNotice` and degrade.
  *
  * The setup page itself, API routes and the lifecycle hooks don't call it;
@@ -72,11 +72,13 @@ export function settingsEnabled(): boolean {
  * (`getTBClient({ accountId })`): the schema is account structure, not user
  * data.
  *
- * On first contact with an account — no config saved yet, which is the
- * install hook's call or, for an account the hook never reached, its first
- * request — it initializes the account first (see `initializeAccount`).
- * Without Settings (`settingsEnabled`) nothing is saved: every account
- * resolves from the guess, made afresh (`resolveByGuess`).
+ * Each slot is guessed by name once per account (see `initializeAccount`):
+ * every slot on first contact — no config saved yet, which is the install
+ * hook's call or, for an account the hook never reached, its first request —
+ * and a slot the spec gains later on the account's next request, so adding a
+ * slot doesn't leave every existing account to bind it by hand. Without
+ * Settings (`settingsEnabled`) nothing is saved: every account resolves from
+ * the guess, made afresh (`resolveByGuess`).
  */
 export async function resolveAccountSchema<S extends SchemaSpec>(
   client: TBClient,
@@ -90,38 +92,74 @@ export async function resolveAccountSchema<S extends SchemaSpec>(
   if (!settingsEnabled()) return resolveByGuess(client, spec);
 
   const config = await configStore.get(client.accountId);
-  if (config) return resolveSchema(client, spec, { bindings: config.bindings });
+  if (config && !hasUnguessedSlots(spec, config)) return resolveSchema(client, spec, { bindings: config.bindings });
 
-  // First contact. The guess reads the account's collections and the fields
-  // of the ones it matches; the resolution that follows reads the same
-  // lists, so hand it what the guess read instead of reading them twice.
+  // First contact, or slots the spec has gained since. The guess reads the
+  // account's collections and the fields of the ones it matches; the
+  // resolution that follows reads the same lists, so hand it what the guess
+  // read instead of reading them twice.
   const structure = readAccountStructure(client);
-  const bindings = await initializeAccount(client, spec, structure);
+  const bindings = await initializeAccount(client, spec, structure, config);
   return resolveSchema(client, spec, { bindings, structure });
 }
 
 /**
- * First contact with an account: make the good-faith guess at its bindings
- * by name (`guessBindings`) and save it, so an account whose collections
- * carry the expected names works at once and the rest start setup with the
- * obvious slots filled. Idempotent: the same account guesses the same way,
- * and once a config exists it is never guessed over — an admin's choices in
- * Settings, including "Not used", stay. Returns what was saved.
+ * Make the good-faith guess by name (`guessBindings`) for the account's slots
+ * not guessed yet, and save it: every slot on first contact, so an account
+ * whose collections carry the expected names works at once and the rest start
+ * setup with the obvious slots filled; later, the slots the spec has gained
+ * since. What is already bound is never guessed over: an admin's choices in
+ * Settings, including "Not used", stay. Returns the bindings saved.
  *
- * Pass the `structure` the caller will resolve with so the guess and the
- * resolution share their reads; without one the guess reads on its own.
+ * `config` is what the account has saved, if anything. Pass the `structure`
+ * the caller will resolve with so the guess and the resolution share their
+ * reads; without one the guess reads on its own.
  */
 export async function initializeAccount<S extends SchemaSpec>(
   client: TBClient,
   spec: S,
-  structure: AccountStructure = readAccountStructure(client)
+  structure: AccountStructure = readAccountStructure(client),
+  config: AccountConfig | null = null
 ): Promise<SchemaBindings> {
   const accountId = client.accountId;
   if (!accountId) throw new Error('initializeAccount needs a client that names its account.');
-  const bindings = await guessBindings(client, spec, undefined, structure);
-  await configStore.set(accountId, { bindings, updatedAt: new Date().toISOString() });
+  const bindings = await guessBindings(client, spec, config?.bindings, structure);
+  await configStore.set(accountId, {
+    ...config,
+    bindings,
+    guessedSlots: slotKeys(spec),
+    // Settings shows this as when the account's choices were last saved; filling new slots isn't that.
+    updatedAt: config?.updatedAt ?? new Date().toISOString(),
+  });
   invalidateSchema(accountId);
   return bindings;
+}
+
+/**
+ * Whether the spec has a slot with no binding that the guess hasn't been made
+ * for: one the spec gained after the account's config was saved. A slot the
+ * guess has already tried and couldn't match stays unset for the admin rather
+ * than being guessed again, and the config rewritten, on every request.
+ */
+function hasUnguessedSlots(spec: SchemaSpec, config: AccountConfig): boolean {
+  const guessed = new Set(config.guessedSlots);
+  return Object.entries(spec).some(([key, collectionSpec]) => {
+    const binding = config.bindings?.[key];
+    if (binding?.id === undefined && !guessed.has(key)) return true;
+    // "Not used": the guess leaves its fields alone.
+    if (binding?.id === null) return false;
+    return Object.keys(collectionSpec.fields).some(
+      (fieldKey) => binding?.fields?.[fieldKey] === undefined && !guessed.has(`${key}.${fieldKey}`)
+    );
+  });
+}
+
+/** Every slot of the spec, as `collection` and `collection.field` keys. */
+function slotKeys(spec: SchemaSpec): string[] {
+  return Object.entries(spec).flatMap(([key, collectionSpec]) => [
+    key,
+    ...Object.keys(collectionSpec.fields).map((fieldKey) => `${key}.${fieldKey}`),
+  ]);
 }
 
 /**
