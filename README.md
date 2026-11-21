@@ -198,6 +198,7 @@ const endField   = fields.find((f) => f.name === 'End Time')!;
 
 // 3. List records — values come back keyed by field ID.
 // pageSize maxes out at 50; for larger result sets, paginate by incrementing `page`.
+// For shifts, `includePayFields: true` adds the hours and pay Teambridge worked out (AGENTS.md → "Pay").
 const { data, totalCount } = await client.collections.records.list(shiftsCollection.id, {
   page: 0,
   pageSize: 50,
